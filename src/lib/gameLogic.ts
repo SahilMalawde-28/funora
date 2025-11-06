@@ -822,29 +822,207 @@ export const initBluffGame = (playerIds: string[]): BluffGameState => {
 };
 
 
+export interface PlayerOption {
+  name: string;
+  role: string; // specialization or position
+}
+
+export interface TeamGameState {
+  phase: 'drafting' | 'complete';
+  category: string;
+  players: string[];
+  teams: { [key: string]: PlayerOption[] };
+  currentPicker: number;
+  availableOptions: PlayerOption[];
+  round: number;
+  teamSize: number;
+}
+
 export const initTeamGame = (playerIds: string[]): TeamGameState => {
   const categories = [
     {
       name: 'Cricket Dream Team',
-      options: ['Virat Kohli', 'MS Dhoni', 'Rohit Sharma', 'Jasprit Bumrah', 'Hardik Pandya', 'KL Rahul', 'Rishabh Pant', 'Ravindra Jadeja', 'Mohammed Shami', 'Yuzvendra Chahal']
-    },
-    {
-      name: 'Anime Squad',
-      options: ['Naruto', 'Luffy', 'Goku', 'Ichigo', 'Eren', 'Tanjiro', 'Saitama', 'Light', 'Gon', 'Deku']
+      options: [
+        { name: 'Sachin Tendulkar', role: 'Batsman' },
+        { name: 'Virat Kohli', role: 'Batsman' },
+        { name: 'MS Dhoni', role: 'Wicketkeeper-Batsman' },
+        { name: 'Rohit Sharma', role: 'Batsman' },
+        { name: 'Rahul Dravid', role: 'Batsman' },
+        { name: 'Sourav Ganguly', role: 'Batsman' },
+        { name: 'Yuvraj Singh', role: 'All-Rounder' },
+        { name: 'Kapil Dev', role: 'All-Rounder' },
+        { name: 'Hardik Pandya', role: 'All-Rounder' },
+        { name: 'Ravindra Jadeja', role: 'All-Rounder' },
+        { name: 'Anil Kumble', role: 'Bowler' },
+        { name: 'Zaheer Khan', role: 'Bowler' },
+        { name: 'Jasprit Bumrah', role: 'Bowler' },
+        { name: 'Mohammed Shami', role: 'Bowler' },
+        { name: 'Ashwin', role: 'Bowler' },
+        { name: 'Rishabh Pant', role: 'Wicketkeeper-Batsman' },
+        { name: 'VVS Laxman', role: 'Batsman' },
+        { name: 'Bhuvneshwar Kumar', role: 'Bowler' },
+        { name: 'KL Rahul', role: 'Batsman' },
+        { name: 'Shikhar Dhawan', role: 'Batsman' },
+        { name: 'AB de Villiers', role: 'Wicketkeeper-Batsman' },
+        { name: 'Jacques Kallis', role: 'All-Rounder' },
+        { name: 'Brian Lara', role: 'Batsman' },
+        { name: 'Ricky Ponting', role: 'Batsman' },
+        { name: 'Glenn McGrath', role: 'Bowler' },
+        { name: 'Shane Warne', role: 'Bowler' },
+        { name: 'Adam Gilchrist', role: 'Wicketkeeper-Batsman' },
+        { name: 'Steve Smith', role: 'Batsman' },
+        { name: 'Ben Stokes', role: 'All-Rounder' },
+        { name: 'Joe Root', role: 'Batsman' },
+        { name: 'James Anderson', role: 'Bowler' },
+        { name: 'Stuart Broad', role: 'Bowler' },
+        { name: 'Kane Williamson', role: 'Batsman' },
+        { name: 'Ross Taylor', role: 'Batsman' },
+        { name: 'Brendon McCullum', role: 'Wicketkeeper-Batsman' },
+        { name: 'Trent Boult', role: 'Bowler' },
+        { name: 'Tim Southee', role: 'Bowler' },
+        { name: 'Daniel Vettori', role: 'Bowler' },
+        { name: 'Shaun Pollock', role: 'All-Rounder' },
+        { name: 'Graeme Smith', role: 'Batsman' },
+        { name: 'Dale Steyn', role: 'Bowler' },
+        { name: 'Hashim Amla', role: 'Batsman' },
+        { name: 'Faf du Plessis', role: 'Batsman' },
+        { name: 'Wasim Akram', role: 'Bowler' },
+        { name: 'Waqar Younis', role: 'Bowler' },
+        { name: 'Shahid Afridi', role: 'All-Rounder' },
+        { name: 'Inzamam-ul-Haq', role: 'Batsman' },
+        { name: 'Imran Khan', role: 'All-Rounder' },
+        { name: 'Chris Gayle', role: 'Batsman' },
+        { name: 'Curtly Ambrose', role: 'Bowler' },
+        { name: 'Brian Lara', role: 'Batsman' },
+        { name: 'Kieron Pollard', role: 'All-Rounder' },
+        { name: 'Andre Russell', role: 'All-Rounder' },
+        { name: 'Muttiah Muralitharan', role: 'Bowler' },
+        { name: 'Kumar Sangakkara', role: 'Wicketkeeper-Batsman' },
+        { name: 'Mahela Jayawardene', role: 'Batsman' },
+        { name: 'Lasith Malinga', role: 'Bowler' },
+        { name: 'Sanath Jayasuriya', role: 'All-Rounder' },
+        { name: 'David Warner', role: 'Batsman' },
+        { name: 'Mitchell Starc', role: 'Bowler' },
+        { name: 'Michael Clarke', role: 'Batsman' },
+        { name: 'Matthew Hayden', role: 'Batsman' },
+        { name: 'Justin Langer', role: 'Batsman' },
+        { name: 'Usman Khawaja', role: 'Batsman' },
+        { name: 'Aaron Finch', role: 'Batsman' },
+        { name: 'Adam Zampa', role: 'Bowler' },
+        { name: 'Travis Head', role: 'Batsman' },
+        { name: 'Alex Carey', role: 'Wicketkeeper' }
+      ],
+      teamSize: 11
     },
     {
       name: 'Football Legends',
-      options: ['Messi', 'Ronaldo', 'Neymar', 'Mbappé', 'Haaland', 'Benzema', 'De Bruyne', 'Salah', 'Lewandowski', 'Modric']
+      options: [
+        { name: 'Lionel Messi', role: 'Forward' },
+        { name: 'Cristiano Ronaldo', role: 'Forward' },
+        { name: 'Neymar Jr', role: 'Forward' },
+        { name: 'Kylian Mbappé', role: 'Forward' },
+        { name: 'Erling Haaland', role: 'Striker' },
+        { name: 'Luka Modrić', role: 'Midfielder' },
+        { name: 'Toni Kroos', role: 'Midfielder' },
+        { name: 'Sergio Ramos', role: 'Defender' },
+        { name: 'Marcelo', role: 'Defender' },
+        { name: 'Casemiro', role: 'Midfielder' },
+        { name: 'Ronaldinho', role: 'Attacking Midfielder' },
+        { name: 'Ronaldo Nazário', role: 'Striker' },
+        { name: 'Kaká', role: 'Midfielder' },
+        { name: 'Roberto Carlos', role: 'Defender' },
+        { name: 'Pelé', role: 'Forward' },
+        { name: 'Diego Maradona', role: 'Attacking Midfielder' },
+        { name: 'Thierry Henry', role: 'Forward' },
+        { name: 'Wayne Rooney', role: 'Forward' },
+        { name: 'David Beckham', role: 'Midfielder' },
+        { name: 'Zinedine Zidane', role: 'Midfielder' },
+        { name: 'Xavi', role: 'Midfielder' },
+        { name: 'Andrés Iniesta', role: 'Midfielder' },
+        { name: 'Carles Puyol', role: 'Defender' },
+        { name: 'Gerard Piqué', role: 'Defender' },
+        { name: 'Sergio Busquets', role: 'Defensive Midfielder' },
+        { name: 'Luis Suárez', role: 'Striker' },
+        { name: 'Edinson Cavani', role: 'Forward' },
+        { name: 'Robert Lewandowski', role: 'Striker' },
+        { name: 'Manuel Neuer', role: 'Goalkeeper' },
+        { name: 'Philipp Lahm', role: 'Defender' },
+        { name: 'Thomas Müller', role: 'Forward' },
+        { name: 'Franck Ribéry', role: 'Winger' },
+        { name: 'Arjen Robben', role: 'Winger' },
+        { name: 'Paul Pogba', role: 'Midfielder' },
+        { name: 'N\'Golo Kanté', role: 'Midfielder' },
+        { name: 'Karim Benzema', role: 'Forward' },
+        { name: 'Gareth Bale', role: 'Winger' },
+        { name: 'Marc-André ter Stegen', role: 'Goalkeeper' },
+        { name: 'Alisson Becker', role: 'Goalkeeper' },
+        { name: 'Virgil van Dijk', role: 'Defender' },
+        { name: 'Mohamed Salah', role: 'Forward' },
+        { name: 'Kevin De Bruyne', role: 'Midfielder' },
+        { name: 'Harry Kane', role: 'Striker' },
+        { name: 'Heung-Min Son', role: 'Winger' },
+        { name: 'Jack Grealish', role: 'Midfielder' },
+        { name: 'Erik ten Hag', role: 'Coach' },
+        { name: 'Pep Guardiola', role: 'Coach' },
+        { name: 'José Mourinho', role: 'Coach' },
+        { name: 'Didier Drogba', role: 'Striker' },
+        { name: 'Frank Lampard', role: 'Midfielder' },
+        { name: 'Steven Gerrard', role: 'Midfielder' },
+        { name: 'Rio Ferdinand', role: 'Defender' },
+        { name: 'Nemanja Vidić', role: 'Defender' },
+        { name: 'Peter Schmeichel', role: 'Goalkeeper' },
+        { name: 'Gianluigi Buffon', role: 'Goalkeeper' },
+        { name: 'Andrea Pirlo', role: 'Midfielder' },
+        { name: 'Del Piero', role: 'Forward' },
+        { name: 'Francesco Totti', role: 'Forward' },
+        { name: 'Paolo Maldini', role: 'Defender' },
+        { name: 'Franco Baresi', role: 'Defender' },
+        { name: 'George Best', role: 'Winger' },
+        { name: 'Bobby Charlton', role: 'Midfielder' },
+        { name: 'Eric Cantona', role: 'Forward' },
+        { name: 'Ryan Giggs', role: 'Winger' },
+        { name: 'Roy Keane', role: 'Midfielder' },
+        { name: 'Wayne Rooney', role: 'Forward' }
+      ],
+      teamSize: 11
+    },
+    {
+      name: 'Anime Squad',
+      options: [
+        { name: 'Naruto Uzumaki', role: 'Ninja' },
+        { name: 'Sasuke Uchiha', role: 'Ninja' },
+        { name: 'Kakashi Hatake', role: 'Sensei' },
+        { name: 'Luffy', role: 'Pirate Captain' },
+        { name: 'Zoro', role: 'Swordsman' },
+        { name: 'Goku', role: 'Saiyan Fighter' },
+        { name: 'Vegeta', role: 'Prince of Saiyans' },
+        { name: 'Levi Ackerman', role: 'Soldier' },
+        { name: 'Eren Yeager', role: 'Titan Shifter' },
+        { name: 'Tanjiro Kamado', role: 'Demon Slayer' }
+      ],
+      teamSize: 3
     },
     {
       name: 'Superhero Team',
-      options: ['Iron Man', 'Spider-Man', 'Batman', 'Superman', 'Thor', 'Black Panther', 'Wonder Woman', 'Flash', 'Hulk', 'Doctor Strange']
+      options: [
+        { name: 'Iron Man', role: 'Tech Genius' },
+        { name: 'Captain America', role: 'Super Soldier' },
+        { name: 'Thor', role: 'God of Thunder' },
+        { name: 'Hulk', role: 'Scientist/Powerhouse' },
+        { name: 'Black Widow', role: 'Spy' },
+        { name: 'Spider-Man', role: 'Web-Slinger' },
+        { name: 'Doctor Strange', role: 'Sorcerer Supreme' },
+        { name: 'Batman', role: 'Strategist' },
+        { name: 'Superman', role: 'Alien Powerhouse' },
+        { name: 'Wonder Woman', role: 'Warrior Princess' }
+      ],
+      teamSize: 3
     }
   ];
 
   const category = categories[Math.floor(Math.random() * categories.length)];
-  const teams: { [key: string]: string[] } = {};
-  playerIds.forEach(id => teams[id] = []);
+  const teams: { [key: string]: PlayerOption[] } = {};
+  playerIds.forEach(id => (teams[id] = []));
 
   return {
     phase: 'drafting',
@@ -852,10 +1030,12 @@ export const initTeamGame = (playerIds: string[]): TeamGameState => {
     players: playerIds,
     teams,
     currentPicker: 0,
-    availableOptions: category.options,
-    round: 1
+    availableOptions: [...category.options],
+    round: 1,
+    teamSize: category.teamSize
   };
 };
+
 
 export const initWavelengthGame = (playerIds: string[]): WavelengthGameState => {
   const spectrums = [
