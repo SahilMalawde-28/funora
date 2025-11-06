@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Room, Player } from '../../lib/supabase';
 import { TeamGameState } from '../../lib/gameLogic';
-import { Users, Trophy, Sparkles } from 'lucide-react';
+import { Users, Trophy, Sparkles, Timer, Shuffle } from 'lucide-react';
 
 interface TeamGameProps {
   room: Room;
@@ -11,6 +11,13 @@ interface TeamGameProps {
   onUpdateState: (newState: Partial<TeamGameState>) => void;
   onEndGame: () => void;
 }
+
+const TEAM_SIZE: Record<string, number> = {
+  'Cricket Dream Team': 11,
+  'Football Legends': 11,
+  'Anime Squad': 5,
+  'Superhero Team': 6
+};
 
 export default function TeamGame({
   room,
@@ -22,31 +29,67 @@ export default function TeamGame({
 }: TeamGameProps) {
   const [selectedOption, setSelectedOption] = useState<string>('');
 
-  const currentPickerPlayer = players[gameState.currentPicker];
-  const isMyTurn = currentPickerPlayer?.player_id === currentPlayer.player_id;
+  const totalTeamSize = TEAM_SIZE[gameState.category] || 5;
+  const isHost = currentPlayer.player_id === room.host_id;
+
+  // Draft order management
+  const [draftOrder, setDraftOrder] = useState<string[]>(
+    gameState.draftOrder || shuffleArray(players.map(p => p.player_id))
+  );
+  const [roundNumber, setRoundNumber] = useState<number>(gameState.round || 1);
+
+  const currentPickerId = draftOrder[gameState.currentPicker];
+  const currentPickerPlayer = players.find(p => p.player_id === currentPickerId);
+  const isMyTurn = currentPickerId === currentPlayer.player_id;
   const myTeam = gameState.teams[currentPlayer.player_id] || [];
+
+  function shuffleArray(arr: string[]): string[] {
+    const shuffled = [...arr];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
 
   const handlePick = (option: string) => {
     if (!isMyTurn || !option) return;
-
     const newTeams = { ...gameState.teams };
     newTeams[currentPlayer.player_id] = [...myTeam, option];
 
     const newAvailable = gameState.availableOptions.filter(o => o !== option);
-    const nextPicker = (gameState.currentPicker + 1) % players.length;
+    let nextPicker = gameState.currentPicker + 1;
+    let nextRound = roundNumber;
+    let newDraftOrder = draftOrder;
+
+    // Round complete?
+    if (nextPicker >= draftOrder.length) {
+      nextPicker = 0;
+      nextRound += 1;
+      // Rotate order for next round (round robin)
+      newDraftOrder = [...draftOrder.slice(1), draftOrder[0]];
+      setDraftOrder(newDraftOrder);
+      setRoundNumber(nextRound);
+    }
 
     const updates: Partial<TeamGameState> = {
       teams: newTeams,
       availableOptions: newAvailable,
-      currentPicker: nextPicker
+      currentPicker: nextPicker,
+      draftOrder: newDraftOrder,
+      round: nextRound
     };
-
-    if (newAvailable.length === 0) {
-      updates.phase = 'reveal';
-    }
 
     onUpdateState(updates);
     setSelectedOption('');
+  };
+
+  const allTeamsFull = players.every(
+    p => (gameState.teams[p.player_id]?.length || 0) >= totalTeamSize
+  );
+
+  const handleReveal = () => {
+    onUpdateState({ phase: 'reveal' });
   };
 
   if (gameState.phase === 'drafting') {
@@ -58,36 +101,56 @@ export default function TeamGame({
               <Users className="w-12 h-12 text-green-600 mx-auto mb-3" />
               <h1 className="text-3xl font-black text-gray-800 mb-2">⚔️ Make Your Team</h1>
               <p className="text-gray-600">{gameState.category}</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Team size limit: <b>{totalTeamSize}</b> players
+              </p>
             </div>
 
-            <div className={`p-6 rounded-2xl ${
-              isMyTurn
-                ? 'bg-gradient-to-r from-green-100 to-emerald-100 border-2 border-green-400'
-                : 'bg-gray-50 border-2 border-gray-200'
-            }`}>
+            <div className="text-center mt-2">
+              <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                <Timer className="w-4 h-4" />
+                <p>
+                  Round <b>{roundNumber}</b> | Order:{" "}
+                  {draftOrder
+                    .map(id => players.find(p => p.player_id === id)?.avatar)
+                    .join(" → ")}
+                </p>
+              </div>
+            </div>
+
+            <div
+              className={`p-6 rounded-2xl ${
+                isMyTurn
+                  ? 'bg-gradient-to-r from-green-100 to-emerald-100 border-2 border-green-400'
+                  : 'bg-gray-50 border-2 border-gray-200'
+              }`}
+            >
               <div className="flex items-center justify-center gap-3">
                 <span className="text-3xl">{currentPickerPlayer?.avatar}</span>
                 <div className="text-center">
                   <p className="text-sm text-gray-600 font-semibold">Current Picker</p>
-                  <p className="text-xl font-black text-gray-800">{currentPickerPlayer?.name}</p>
+                  <p className="text-xl font-black text-gray-800">
+                    {currentPickerPlayer?.name}
+                  </p>
                 </div>
               </div>
               {isMyTurn && (
-                <p className="text-center text-green-700 font-bold mt-3">🎯 Your turn to pick!</p>
+                <p className="text-center text-green-700 font-bold mt-3">
+                  🎯 Your turn to pick!
+                </p>
               )}
             </div>
 
             <div>
-              <h2 className="text-lg font-bold text-gray-800 mb-3">Available Options</h2>
+              <h2 className="text-lg font-bold text-gray-800 mb-3">
+                Available Options
+              </h2>
               <div className="grid grid-cols-2 gap-3">
-                {gameState.availableOptions.map((option) => (
+                {gameState.availableOptions.map(option => (
                   <button
                     key={option}
-                    onClick={() => {
-                      setSelectedOption(option);
-                      handlePick(option);
-                    }}
-                    disabled={!isMyTurn}
+                    onClick={() => handlePick(option)}
+                    disabled={!isMyTurn || myTeam.length >= totalTeamSize}
                     className={`p-4 rounded-xl border-2 transition-all font-semibold ${
                       isMyTurn
                         ? 'border-green-200 bg-white hover:border-green-500 hover:bg-green-50 hover:scale-105'
@@ -117,24 +180,39 @@ export default function TeamGame({
                 <p className="text-center text-gray-500 py-4">No picks yet</p>
               )}
             </div>
+
+            {isHost && allTeamsFull && (
+              <div className="text-center mt-4">
+                <button
+                  onClick={handleReveal}
+                  className="px-6 py-3 bg-gradient-to-r from-yellow-400 to-orange-400 text-white font-bold rounded-xl hover:scale-105 transition-all"
+                >
+                  Reveal Teams 🎉
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-3xl shadow-xl p-6">
             <h2 className="text-lg font-bold text-gray-800 mb-3">All Teams</h2>
             <div className="space-y-3">
-              {players.map((player) => {
+              {players.map(player => {
                 const team = gameState.teams[player.player_id] || [];
                 return (
                   <div key={player.id} className="flex items-center gap-3">
                     <span className="text-2xl">{player.avatar}</span>
                     <div className="flex-1">
                       <p className="font-bold text-gray-800 text-sm">{player.name}</p>
-                      <p className="text-xs text-gray-600">{team.length} picks</p>
+                      <p className="text-xs text-gray-600">
+                        {team.length}/{totalTeamSize} picks
+                      </p>
                     </div>
                     <div className="flex-1 bg-gray-200 rounded-full h-2">
                       <div
                         className="bg-green-500 h-2 rounded-full transition-all"
-                        style={{ width: `${(team.length / 3) * 100}%` }}
+                        style={{
+                          width: `${(team.length / totalTeamSize) * 100}%`
+                        }}
                       />
                     </div>
                   </div>
@@ -147,6 +225,7 @@ export default function TeamGame({
     );
   }
 
+  // --- REVEAL PHASE ---
   if (gameState.phase === 'reveal') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 p-4">
@@ -192,7 +271,7 @@ export default function TeamGame({
 
             <div className="text-center p-6 bg-gradient-to-r from-yellow-100 to-orange-100 rounded-2xl">
               <p className="text-lg font-bold text-gray-800 mb-2">🏆 All teams look amazing!</p>
-              <p className="text-sm text-gray-600">Everyone's a winner in this draft!</p>
+              <p className="text-sm text-gray-600">Everyone’s a winner in this draft!</p>
             </div>
 
             <button
