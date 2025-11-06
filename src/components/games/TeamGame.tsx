@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Room, Player } from '../../lib/supabase';
-import { TeamGameState } from '../../lib/gameLogic';
-import { Users, Trophy, Sparkles, Timer, Shuffle } from 'lucide-react';
+import { TeamGameState, shuffleArray } from '../../lib/gameLogic';
+import { Users, Trophy, Sparkles, Timer } from 'lucide-react';
 
 interface TeamGameProps {
   room: Room;
@@ -27,14 +27,14 @@ export default function TeamGame({
   onUpdateState,
   onEndGame
 }: TeamGameProps) {
-  const [selectedOption, setSelectedOption] = useState<string>('');
-
   const totalTeamSize = TEAM_SIZE[gameState.category] || 5;
   const isHost = currentPlayer.player_id === room.host_id;
 
-  // Draft order management
+  // Ensure draft order is initialized
   const [draftOrder, setDraftOrder] = useState<string[]>(
-    gameState.draftOrder || shuffleArray(players.map(p => p.player_id))
+    gameState.draftOrder.length > 0
+      ? gameState.draftOrder
+      : shuffleArray(players.map(p => p.player_id))
   );
   const [roundNumber, setRoundNumber] = useState<number>(gameState.round || 1);
 
@@ -43,17 +43,9 @@ export default function TeamGame({
   const isMyTurn = currentPickerId === currentPlayer.player_id;
   const myTeam = gameState.teams[currentPlayer.player_id] || [];
 
-  function shuffleArray(arr: string[]): string[] {
-    const shuffled = [...arr];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  }
-
   const handlePick = (option: string) => {
     if (!isMyTurn || !option) return;
+
     const newTeams = { ...gameState.teams };
     newTeams[currentPlayer.player_id] = [...myTeam, option];
 
@@ -62,35 +54,27 @@ export default function TeamGame({
     let nextRound = roundNumber;
     let newDraftOrder = draftOrder;
 
-    // Round complete?
+    // Round complete → rotate order
     if (nextPicker >= draftOrder.length) {
       nextPicker = 0;
       nextRound += 1;
-      // Rotate order for next round (round robin)
       newDraftOrder = [...draftOrder.slice(1), draftOrder[0]];
       setDraftOrder(newDraftOrder);
       setRoundNumber(nextRound);
     }
 
-    const updates: Partial<TeamGameState> = {
+    onUpdateState({
       teams: newTeams,
       availableOptions: newAvailable,
       currentPicker: nextPicker,
       draftOrder: newDraftOrder,
       round: nextRound
-    };
-
-    onUpdateState(updates);
-    setSelectedOption('');
+    });
   };
 
   const allTeamsFull = players.every(
     p => (gameState.teams[p.player_id]?.length || 0) >= totalTeamSize
   );
-
-  const handleReveal = () => {
-    onUpdateState({ phase: 'reveal' });
-  };
 
   if (gameState.phase === 'drafting') {
     return (
@@ -110,10 +94,10 @@ export default function TeamGame({
               <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
                 <Timer className="w-4 h-4" />
                 <p>
-                  Round <b>{roundNumber}</b> | Order:{" "}
+                  Round <b>{roundNumber}</b> | Order:{' '}
                   {draftOrder
                     .map(id => players.find(p => p.player_id === id)?.avatar)
-                    .join(" → ")}
+                    .join(' → ')}
                 </p>
               </div>
             </div>
@@ -184,7 +168,7 @@ export default function TeamGame({
             {isHost && allTeamsFull && (
               <div className="text-center mt-4">
                 <button
-                  onClick={handleReveal}
+                  onClick={() => onUpdateState({ phase: 'reveal' })}
                   className="px-6 py-3 bg-gradient-to-r from-yellow-400 to-orange-400 text-white font-bold rounded-xl hover:scale-105 transition-all"
                 >
                   Reveal Teams 🎉
@@ -199,7 +183,7 @@ export default function TeamGame({
               {players.map(player => {
                 const team = gameState.teams[player.player_id] || [];
                 return (
-                  <div key={player.id} className="flex items-center gap-3">
+                  <div key={player.player_id} className="flex items-center gap-3">
                     <span className="text-2xl">{player.avatar}</span>
                     <div className="flex-1">
                       <p className="font-bold text-gray-800 text-sm">{player.name}</p>
@@ -225,7 +209,7 @@ export default function TeamGame({
     );
   }
 
-  // --- REVEAL PHASE ---
+  // --- Reveal Phase ---
   if (gameState.phase === 'reveal') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 p-4">
@@ -238,15 +222,14 @@ export default function TeamGame({
             </div>
 
             <div className="space-y-4">
-              {players.map((player, idx) => {
+              {players.map(player => {
                 const team = gameState.teams[player.player_id] || [];
                 return (
                   <div
-                    key={player.id}
+                    key={player.player_id}
                     className="p-6 rounded-2xl bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200"
                   >
                     <div className="flex items-center gap-3 mb-4">
-                      {idx === 0 && <Trophy className="w-6 h-6 text-yellow-500" />}
                       <span className="text-3xl">{player.avatar}</span>
                       <div>
                         <p className="text-xl font-black text-gray-800">{player.name}'s Team</p>
@@ -254,9 +237,9 @@ export default function TeamGame({
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      {team.map((member, mIdx) => (
+                      {team.map((member, idx) => (
                         <div
-                          key={mIdx}
+                          key={idx}
                           className="p-3 rounded-lg bg-white text-center font-semibold text-gray-800 border border-green-200"
                         >
                           <Sparkles className="w-4 h-4 inline mr-1 text-green-600" />
