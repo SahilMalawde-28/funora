@@ -1,316 +1,339 @@
-import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
-import { MemoryGameState, Tile } from "../../lib/gameLogic";
+// components/games/MemoryGame.tsx
+import React, { useEffect, useMemo, useState } from "react";
 import { Room, Player } from "../../lib/supabase";
+import {
+  initMemoryGameState,
+  handleTileTap,
+  activatePaint,
+  activateStake,
+  activateViewPart,
+  MemoryGameState,
+  Tile,
+  PlayerState,
+} from "../../lib/gameLogic";
+import { Trophy, Sparkles } from "lucide-react";
 
 interface MemoryGameProps {
   room: Room;
-  players: Player[];
+  players: Player[]; // supabase players list (must have player_id or id and name)
   currentPlayer: Player;
-  gameState: MemoryGameState;
-  onUpdateState: (newState: Partial<MemoryGameState>) => void;
-  isHost: boolean;
+  gameState: MemoryGameState | null;
+  onUpdateState: (newState: Partial<MemoryGameState> | MemoryGameState) => void;
+  // parent handles supabase persistence of the provided object(s)
 }
 
-const COLORS = [
-  "#ef4444", "#f97316", "#facc15", "#22c55e", "#3b82f6",
-  "#8b5cf6", "#ec4899", "#14b8a6", "#f59e0b", "#64748b"
-];
-
-export default function MemoryGame({
-  room,
-  players,
-  currentPlayer,
-  gameState,
-  onUpdateState,
-  isHost,
-}: MemoryGameProps) {
-  const [showColors, setShowColors] = useState(false);
-  const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const myColor = COLORS[players.findIndex(p => p.id === currentPlayer.id) % COLORS.length];
-
-  // Handle Supabase Realtime Sync
-  useEffect(() => {
-    const channel = supabase
-      .channel(`room-${room.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: `id=eq.${room.id}` },
-        (payload) => {
-          if (payload.new?.game_state) onUpdateState(payload.new.game_state);
-        })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [room.id, onUpdateState]);
-
-  // Host starts the game
-  const handleStart = async () => {
-    if (!isHost) return;
-    setIsLoading(true);
-    await supabase.from("rooms").update({
-      game_state: { ...gameState, started: true }
-    }).eq("id", room.id);
-    setIsLoading(false);
-
-    // Show grid for 5 seconds
-    setShowColors(true);
-    setTimeout(() => setShowColors(false), 5000);
-  };
-
-  const handleTileClick = async (tile: Tile) => {
-    if (!gameState.started || currentPlayer.id !== gameState.currentTurn) return;
-
-    const updatedGrid = gameState.grid.map(row =>
-      row.map(t => (t.id === tile.id ? { ...t, revealed: true } : t))
-    );
-
-    const newState = {
-      ...gameState,
-      grid: updatedGrid,
-      revealedTiles: [...gameState.revealedTiles, tile.id]
-    };
-
-    // Check after 2 reveals
-    if (newState.revealedTiles.length === 2) {
-      const [id1, id2] = newState.revealedTiles;
-      const flat = newState.grid.flat();
-      const t1 = flat.find(t => t.id === id1);
-      const t2 = flat.find(t => t.id === id2);
-
-      let updatedScores = { ...gameState.scores };
-      let nextTurn = gameState.currentTurn;
-
-      if (t1?.color === t2?.color) {
-        updatedScores[currentPlayer.id] = (updatedScores[currentPlayer.id] || 0) + 1;
-      } else {
-        const idx = Object.keys(updatedScores).indexOf(gameState.currentTurn);
-        const nextIdx = (idx + 1) % Object.keys(updatedScores).length;
-        nextTurn = Object.keys(updatedScores)[nextIdx];
-      }
-
-      setTimeout(async () => {
-        const resetGrid = newState.grid.map(row =>
-          row.map(t =>
-            (t.id === id1 || t.id === id2) && t1?.color !== t2?.color
-              ? { ...t, revealed: false }
-              : t
-          )
-        );
-        await supabase.from("rooms").update({
-          game_state: {
-            ...newState,
-            grid: resetGrid,
-            revealedTiles: [],
-            scores: updatedScores,
-            currentTurn: nextTurn,
-          }
-        }).eq("id", room.id);
-      }, 1000);
-    } else {
-      await supabase.from("rooms").update({
-        game_state: newState
-      }).eq("id", room.id);
-    }
-  };
-
-  // --- ABILITIES ---
-  const handleAbility = async (type: "paint" | "stake" | "view") => {
-  if (!currentPlayer || !gameState) return;
-
-  const { grid, playerAbilities } = gameState;
-  let newGrid = [...grid.map(row => [...row])];
-
-  const randomCell = (filterFn: (cell: any) => boolean) => {
-    const valid = [];
-    newGrid.forEach((row, i) =>
-      row.forEach((cell, j) => filterFn(cell) && valid.push([i, j]))
-    );
-    if (valid.length === 0) return null;
-    return valid[Math.floor(Math.random() * valid.length)];
-  };
-
-  switch (type) {
-    case "view": {
-      // Reveal ~25% random cells temporarily
-      const cellsToReveal = Math.floor((grid.length * grid[0].length) * 0.25);
-      const visibleGrid = newGrid.map(row =>
-        row.map(cell => ({ ...cell, visible: false }))
-      );
-
-      for (let i = 0; i < cellsToReveal; i++) {
-        const pos = randomCell(() => true);
-        if (!pos) continue;
-        const [r, c] = pos;
-        visibleGrid[r][c].visible = true;
-      }
-
-      await onUpdateState({ grid: visibleGrid });
-      setTimeout(() => {
-        const hiddenGrid = visibleGrid.map(row =>
-          row.map(cell => ({ ...cell, visible: false }))
-        );
-        onUpdateState({ grid: hiddenGrid });
-      }, 3000);
-
-      // consume ability
-      const newAbilities = {
-        ...playerAbilities,
-        [currentPlayer.id]: {
-          ...playerAbilities[currentPlayer.id],
-          view: Math.max(0, playerAbilities[currentPlayer.id].view - 1),
-        },
-      };
-      await onUpdateState({ playerAbilities: newAbilities });
-      break;
-    }
-
-    case "paint": {
-      const emptyCell = randomCell(cell => !cell.color);
-      const ownCell = randomCell(cell => cell.owner === currentPlayer.id);
-
-      if (!emptyCell || !ownCell) {
-        alert("No valid cells to paint!");
-        return;
-      }
-
-      const [r1, c1] = emptyCell;
-      const [r2, c2] = ownCell;
-
-      // Paint a colorless cell with player color
-      newGrid[r1][c1] = {
-        ...newGrid[r1][c1],
-        color: currentPlayer.color,
-        owner: currentPlayer.id,
-      };
-
-      // Make one of your color tiles colorless
-      newGrid[r2][c2] = { color: null, owner: null };
-
-      const newAbilities = {
-        ...playerAbilities,
-        [currentPlayer.id]: {
-          ...playerAbilities[currentPlayer.id],
-          paint: Math.max(0, playerAbilities[currentPlayer.id].paint - 1),
-        },
-      };
-
-      await onUpdateState({ grid: newGrid, playerAbilities: newAbilities });
-      break;
-    }
-
-    case "stake": {
-      const ownCell = randomCell(cell => cell.owner === currentPlayer.id);
-      if (!ownCell) {
-        alert("You don't have any tiles to stake!");
-        return;
-      }
-
-      const [r, c] = ownCell;
-      newGrid[r][c].visible = true;
-
-      await onUpdateState({ grid: newGrid });
-
-      // Hide again after few seconds (like 3s)
-      setTimeout(() => {
-        newGrid[r][c].visible = false;
-        onUpdateState({ grid: newGrid });
-      }, 3000);
-
-      const newAbilities = {
-        ...playerAbilities,
-        [currentPlayer.id]: {
-          ...playerAbilities[currentPlayer.id],
-          stake: Math.max(0, playerAbilities[currentPlayer.id].stake - 1),
-        },
-      };
-      await onUpdateState({ playerAbilities: newAbilities });
-      break;
-    }
-
-    default:
-      break;
-  }
+const ScoresBox: React.FC<{ p: PlayerState; isCurrent: boolean }> = ({ p, isCurrent }) => {
+  return (
+    <div
+      style={{
+        borderRadius: 12,
+        padding: "10px 12px",
+        background: isCurrent ? "linear-gradient(90deg,#0ea5e9, #7c3aed)" : "#111827",
+        color: "#fff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ width: 18, height: 18, background: p.color, borderRadius: 6 }} />
+        <div>
+          <div style={{ fontWeight: 700 }}>{p.name}</div>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>{p.revealedCount}/{p.ownedCount} tiles</div>
+        </div>
+      </div>
+      <div style={{ fontWeight: 700 }}>{p.revealedCount}</div>
+    </div>
+  );
 };
 
+const MemoryGame: React.FC<MemoryGameProps> = ({ room, players, currentPlayer, gameState, onUpdateState }) => {
+  const [localPreview, setLocalPreview] = useState(false); // true while 5s preview is showing
+  const [starting, setStarting] = useState(false);
+  const [localState, setLocalState] = useState<MemoryGameState | null>(gameState);
+  const hostId = room?.host_id || room?.hostId || null;
+  const isHost = currentPlayer && (currentPlayer.player_id === hostId || (currentPlayer.id && currentPlayer.id === hostId));
 
-  // --- UI ---
-  return (
-    <div className="flex flex-col items-center text-white p-4">
-      <h1 className="text-3xl font-bold mb-2">🎨 Memory Grid Game</h1>
-      <p className="text-gray-300 mb-4">Remember your tiles and uncover them fast!</p>
+  // keep local copy in sync
+  useEffect(() => {
+    setLocalState(gameState ?? null);
+  }, [gameState]);
 
-      {!gameState.started && isHost && (
-        <button
-          onClick={handleStart}
-          disabled={isLoading}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg mb-4"
-        >
-          {isLoading ? "Starting..." : "Start Game"}
-        </button>
-      )}
+  // helper: get UI-friendly players (gameState.players) mapped
+  const gamePlayers = localState?.players ?? [];
 
-      {/* Scores Display */}
-      <div className="flex flex-wrap justify-center gap-3 mb-4">
-        {players.map((p) => (
-          <div
-            key={p.id}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl shadow-md ${gameState.currentTurn === p.id ? "bg-blue-800" : "bg-gray-800"}`}
-          >
-            <div className="w-4 h-4 rounded-full" style={{ background: COLORS[players.findIndex(pl => pl.id === p.id) % COLORS.length] }}></div>
-            <span className="font-semibold">{p.name}</span>
-            <span className="text-yellow-300 ml-1">{gameState.scores[p.id] || 0}</span>
+  // Start handler (host only)
+  const handleStart = () => {
+    if (!isHost) return;
+    // build minimal input for init: use players array (use player_id if present)
+    const inputPlayers = players.map((p: any) => ({ id: p.player_id ?? p.id, name: p.name ?? p.display_name ?? p.player_name ?? p.player_id ?? "Anon" }));
+    const state = initMemoryGameState(inputPlayers);
+    state.started = true;
+    // persist initial state (full preview)
+    onUpdateState(state);
+    setLocalState(state);
+    setLocalPreview(true);
+    setStarting(true);
+
+    // hide after 5s (make unrevealed = false)
+    setTimeout(() => {
+      // hide all unrevealed (i.e., set revealed=false for tiles that should be hidden).
+      // Since init sets all tiles revealed for preview, we set them false unless someone had permanent reveals (none yet)
+      const next: MemoryGameState = {
+        ...state,
+        grid: state.grid.map(row => row.map(tile => ({ ...tile, revealed: false }))),
+      };
+      onUpdateState(next);
+      setLocalState(next);
+      setLocalPreview(false);
+      setStarting(false);
+    }, 5000);
+  };
+
+  // helper to get tile lookup
+  const findTileCoords = (s: MemoryGameState, tileId: string): { r: number; c: number } | null => {
+    for (let r = 0; r < s.grid.length; r++) {
+      for (let c = 0; c < s.grid[r].length; c++) {
+        if (s.grid[r][c].id === tileId) return { r, c };
+      }
+    }
+    return null;
+  };
+
+  // Click handler wrapper
+  const handleClick = (tile: Tile) => {
+    if (!localState) return;
+    if (!localState.started) return;
+    if (localPreview) return; // cannot click during preview
+    const curPid = localState.turnOrder[localState.turnIndex];
+    const meId = currentPlayer.player_id ?? currentPlayer.id;
+    if (!meId) return;
+    if (curPid !== meId) return; // not your turn
+    if (tile.revealed) return; // already permanently revealed
+    // call logic to get next state
+    const updated = handleTileTap(localState, meId, tile.id);
+    // write up
+    onUpdateState(updated);
+    setLocalState(updated);
+  };
+
+  // Ability handlers (call logic then persist)
+  const handlePaint = () => {
+    if (!localState) return;
+    const meId = currentPlayer.player_id ?? currentPlayer.id;
+    if (!meId) return;
+    const next = activatePaint(localState, meId);
+    onUpdateState(next);
+    setLocalState(next);
+  };
+
+  const handleStake = () => {
+    if (!localState) return;
+    const meId = currentPlayer.player_id ?? currentPlayer.id;
+    if (!meId) return;
+    const next = activateStake(localState, meId);
+    onUpdateState(next);
+    setLocalState(next);
+  };
+
+  const handleView = () => {
+    if (!localState) return;
+    const meId = currentPlayer.player_id ?? currentPlayer.id;
+    if (!meId) return;
+    const next = activateViewPart(localState, meId);
+    onUpdateState(next);
+    setLocalState(next);
+
+    // also schedule clearing of viewTiles after 3s (so UI hides them)
+    setTimeout(() => {
+      if (!localState) return;
+      const cleared = { ...next, viewTiles: [] };
+      onUpdateState(cleared);
+      setLocalState(cleared);
+    }, 3000);
+  };
+
+  // Render helpers
+  if (!localState) {
+    // before start: show start button to host, else waiting text
+    return (
+      <div style={{ padding: 24 }}>
+        <div style={{ maxWidth: 960, margin: "0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <Trophy color="#f59e0b" />
+              <h2 style={{ margin: 0 }}>🧠 Memory Clash</h2>
+            </div>
+            <div>
+              {isHost ? (
+                <button onClick={handleStart} style={{ background: "#10b981", color: "#fff", padding: "8px 14px", borderRadius: 10, fontWeight: 700 }}>
+                  Start Game
+                </button>
+              ) : (
+                <div style={{ color: "#9ca3af" }}>Waiting for host to start...</div>
+              )}
+            </div>
           </div>
-        ))}
-      </div>
 
-      {/* Game Grid */}
-      <div
-        className="grid gap-1"
-        style={{
-          gridTemplateColumns: `repeat(${gameState.gridSize}, 50px)`,
-          gridTemplateRows: `repeat(${gameState.gridSize}, 50px)`,
-        }}
-      >
-        {gameState.grid.flat().map((tile) => (
-          <div
-            key={tile.id}
-            onClick={() => handleTileClick(tile)}
-            style={{
-              background: tile.revealed || showColors ? tile.color : "#1f2937",
-              border: "1px solid #374151",
-              borderRadius: "6px",
-              width: "50px",
-              height: "50px",
-              cursor: "pointer",
-            }}
-          ></div>
-        ))}
+          <div style={{ background: "#0f172a", padding: 16, borderRadius: 12, color: "#e5e7eb" }}>
+            <div style={{ marginBottom: 8 }}>Players:</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10 }}>
+              {players.map((p: any) => (
+                <div key={p.player_id ?? p.id} style={{ padding: 8, borderRadius: 10, background: "#111827", color: "#fff" }}>
+                  <div style={{ fontWeight: 700 }}>{p.name ?? p.player_id ?? p.id}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
+    );
+  }
 
-      {/* Abilities on the Right */}
-      <div className="flex justify-center gap-4 mt-5">
-        <button
-          onClick={() => handleAbility("paint")}
-          className="w-14 h-14 rounded-full bg-pink-600 hover:bg-pink-700 flex items-center justify-center"
-        >
-          🎨
-        </button>
-        <button
-          onClick={() => handleAbility("stake")}
-          className="w-14 h-14 rounded-full bg-yellow-500 hover:bg-yellow-600 flex items-center justify-center"
-        >
-          ⚡
-        </button>
-        <button
-          onClick={() => handleAbility("view")}
-          className="w-14 h-14 rounded-full bg-green-600 hover:bg-green-700 flex items-center justify-center"
-        >
-          👁️
-        </button>
+  // active UI
+  const gridSize = localState.grid.length;
+  const curPlayerId = localState.turnOrder[localState.turnIndex];
+  const curPlayer = localState.players.find(p => p.id === curPlayerId) ?? null;
+  const mePlayer = localState.players.find(p => p.id === (currentPlayer.player_id ?? currentPlayer.id)) ?? null;
+
+  // flattened tiles for keys
+  const flatTiles = localState.grid.flat();
+
+  return (
+    <div style={{ padding: 20 }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <Trophy color="#f59e0b" />
+            <div>
+              <h2 style={{ margin: 0 }}>🧠 Memory Clash</h2>
+              <div style={{ fontSize: 13, color: "#9ca3af" }}>Grid: {gridSize}×{gridSize} • Turn: {curPlayer?.name ?? "—"}</div>
+            </div>
+          </div>
+
+          <div>
+            {isHost && (
+              <button onClick={() => {
+                // host can force show preview again for 5s (optional)
+                setLocalPreview(true);
+                // show all tiles by setting revealed true locally (persist)
+                const showAll = { ...localState, grid: localState.grid.map(r => r.map(t => ({ ...t, revealed: true }))) };
+                onUpdateState(showAll);
+                setLocalState(showAll);
+                setTimeout(() => {
+                  const hidden = { ...showAll, grid: showAll.grid.map(r => r.map(t => ({ ...t, revealed: false }))) };
+                  onUpdateState(hidden);
+                  setLocalState(hidden);
+                  setLocalPreview(false);
+                }, 5000);
+              }} style={{ padding: "8px 12px", background: "#7c3aed", color: "#fff", borderRadius: 10, marginRight: 8 }}>
+                Preview 5s
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Top scoreboard */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 16 }}>
+          {/* Left: Grid */}
+          <div>
+            <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+              {/* show turn box */}
+              <div style={{ padding: 12, borderRadius: 10, background: "#0b1220", color: "#e6eef8", display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ width: 14, height: 14, background: curPlayer?.color, borderRadius: 4 }} />
+                <div>
+                  <div style={{ fontWeight: 800 }}>{curPlayer?.name ?? "—"}</div>
+                  <div style={{ fontSize: 12, color: "#9ca3af" }}>Current Turn</div>
+                </div>
+              </div>
+
+              {/* abilities for me */}
+              <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+                <button onClick={handlePaint} disabled={!mePlayer || mePlayer.abilities.paint <= 0 || localPreview} style={{ borderRadius: 999, padding: 10, background: mePlayer?.abilities.paint ? "#ec4899" : "#374151", color: "#fff", fontWeight: 800 }}>
+                  🎨 {mePlayer?.abilities.paint ?? 0}
+                </button>
+                <button onClick={handleStake} disabled={!mePlayer || mePlayer.abilities.stake <= 0 || localPreview} style={{ borderRadius: 999, padding: 10, background: mePlayer?.abilities.stake ? "#3b82f6" : "#374151", color: "#fff", fontWeight: 800 }}>
+                  💎 {mePlayer?.abilities.stake ?? 0}
+                </button>
+                <button onClick={handleView} disabled={!mePlayer || mePlayer.abilities.view <= 0 || localPreview} style={{ borderRadius: 999, padding: 10, background: mePlayer?.abilities.view ? "#10b981" : "#374151", color: "#fff", fontWeight: 800 }}>
+                  👁️ {mePlayer?.abilities.view ?? 0}
+                </button>
+              </div>
+            </div>
+
+            {/* Grid */}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: `repeat(${gridSize}, 48px)`,
+              gap: 6,
+              justifyContent: "center",
+              padding: 8,
+              background: "#020617",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.02)",
+            }}>
+              {localState.grid.map((row, rIdx) =>
+                row.map(tile => {
+                  const isTempRevealed = localState.viewTiles && localState.viewTiles.includes(tile.id);
+                  const showColor = tile.revealed || isTempRevealed || localPreview;
+                  const bg = showColor ? (tile.color || "#9ca3af") : "#0f172a";
+                  return (
+                    <div
+                      key={tile.id}
+                      onClick={() => handleClick(tile)}
+                      style={{
+                        width: 48, height: 48, borderRadius: 8,
+                        background: bg,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        border: tile.revealed ? "2px solid rgba(255,255,255,0.06)" : "1px solid rgba(255,255,255,0.02)",
+                        cursor: (localPreview || tile.revealed) ? "not-allowed" : (localState.turnOrder[localState.turnIndex] === (currentPlayer.player_id ?? currentPlayer.id) ? "pointer" : "not-allowed"),
+                        transition: "all 120ms ease"
+                      }}
+                      title={showColor ? (tile.ownerId ? `Owner: ${tile.ownerId}` : "Colorless") : "Hidden"}
+                    >
+                      {showColor && tile.ownerId ? <div style={{ color: "#fff", fontWeight: 800, fontSize: 12 }}>{/* no text by design */}</div> : null}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Right: Scores & players */}
+          <div>
+            <div style={{ marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0 }}>Players</h3>
+              <div style={{ fontSize: 12, color: "#9ca3af" }}>{localState.players.length} players</div>
+            </div>
+
+            <div style={{ display: "grid", gap: 8 }}>
+              {localState.players.map(p => (
+                <div key={p.id}>
+                  <ScoresBox p={p} isCurrent={p.id === curPlayerId} />
+                </div>
+              ))}
+            </div>
+
+            {/* host start / next-round controls */}
+            <div style={{ marginTop: 12 }}>
+              {isHost && !localState.started && (
+                <button onClick={handleStart} style={{ width: "100%", padding: 10, background: "#10b981", color: "#fff", borderRadius: 10, fontWeight: 800 }}>
+                  Start Game
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer: small tips */}
+        <div style={{ marginTop: 14, color: "#9ca3af", fontSize: 13 }}>
+          Tip: Each tile is 1 point. If you reveal your own tile you score it; if you reveal someone else's tile it counts for them.
+        </div>
       </div>
     </div>
   );
-}
+};
+
+export default MemoryGame;
