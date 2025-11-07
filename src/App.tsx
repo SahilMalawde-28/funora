@@ -155,7 +155,7 @@ function App() {
         gameState = initBoilingWaterGame(playerIds);
         break;
       case 'memory':
-        gameState = initMemoryGame(playerIds);
+        gameState = initMemoryGameState(playerIds);
         break;
       default:
         return;
