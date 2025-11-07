@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
 import {
   initMemoryGameState,
   handleTileTap,
@@ -8,6 +7,7 @@ import {
   activateViewPart,
   MemoryGameState,
 } from "../../lib/gameLogic";
+import { supabase } from "../../lib/supabase";
 
 interface MemoryGameProps {
   room: any;
@@ -24,158 +24,176 @@ const MemoryGame: React.FC<MemoryGameProps> = ({
   gameState,
   onUpdateState,
 }) => {
-  const [localState, setLocalState] = useState<MemoryGameState | null>(null);
-  const [channel, setChannel] = useState<any>(null);
-  const [showColors, setShowColors] = useState(false);
+  const [localState, setLocalState] = useState<MemoryGameState | null>(gameState);
+  const [showGrid, setShowGrid] = useState(false);
+  const [showStartButton, setShowStartButton] = useState(false);
 
-  // --------------------- SETUP CHANNEL ---------------------
+  // 🔁 Realtime listener for Supabase game state updates
   useEffect(() => {
-    const ch = supabase.channel(`room-${room.id}`);
-    ch.on("broadcast", { event: "update" }, ({ payload }) => {
-      setLocalState(payload.state);
-    });
-    ch.subscribe();
-    setChannel(ch);
+    if (!room?.id) return;
+
+    const channel = supabase
+      .channel(`memory-game-${room.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rooms", filter: `id=eq.${room.id}` },
+        (payload) => {
+          const newState = payload.new?.game_state;
+          if (newState) setLocalState(newState);
+        }
+      )
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(ch);
+      supabase.removeChannel(channel);
     };
-  }, [room.id]);
+  }, [room?.id]);
 
-  // --------------------- INIT STATE ---------------------
+  // initialize host button
   useEffect(() => {
-    if (!gameState?.grid && players.length > 0) {
-      const initState = initMemoryGameState(players);
-      setLocalState(initState);
-      if (room.host_id === currentPlayer.id) onUpdateState(initState);
+    if (!gameState?.started && players.length > 0) {
+      if (currentPlayer.id === room.host_id) setShowStartButton(true);
     } else {
       setLocalState(gameState);
     }
   }, [gameState, players]);
 
-  // --------------------- HELPERS ---------------------
-  const broadcast = (newState: any) => {
-    if (channel)
-      channel.send({
-        type: "broadcast",
-        event: "update",
-        payload: { state: newState },
-      });
-    onUpdateState(newState);
-    setLocalState(newState);
+  // 🔄 Push updates to Supabase (for everyone)
+  const syncToSupabase = async (newState: MemoryGameState | Partial<MemoryGameState>) => {
+    await supabase
+      .from("rooms")
+      .update({ game_state: newState })
+      .eq("id", room.id);
   };
 
-  if (!localState) return null;
-  const { grid, currentPlayerId, players: gamePlayers, started } = localState;
+  // start game handler
+  const handleStart = async () => {
+    const newState = initMemoryGameState(players.map((p) => ({ id: p.id, name: p.name })));
+    newState.started = true;
+    onUpdateState(newState);
+    setShowGrid(true);
+    await syncToSupabase(newState);
 
-  const me = gamePlayers.find((p) => p.id === currentPlayer.id);
-  const isMyTurn = currentPlayer.id === currentPlayerId;
-  const isHost = room.host_id === currentPlayer.id;
-
-  // --------------------- START GAME ---------------------
-  const startGame = () => {
-    setShowColors(true);
-    setTimeout(() => {
-      setShowColors(false);
-      const newState = { ...localState, started: true };
-      broadcast(newState);
+    // show grid for 5 sec, then hide unrevealed tiles
+    setTimeout(async () => {
+      const hiddenGrid = {
+        ...newState,
+        grid: newState.grid.map((row) =>
+          row.map((tile) => ({ ...tile, revealed: false }))
+        ),
+      };
+      setShowGrid(false);
+      onUpdateState(hiddenGrid);
+      await syncToSupabase(hiddenGrid);
     }, 5000);
   };
 
-  const handleClick = (tileId: string) => {
-    if (!isMyTurn || !started) return;
-    const newState = handleTileTap(localState, currentPlayer.id, tileId);
-    broadcast(newState);
-  };
-
-  const handleAbility = (type: "paint" | "stake" | "viewPart") => {
-    let newState = localState;
-    if (type === "paint") newState = activatePaint(localState, currentPlayer.id);
-    if (type === "stake") newState = activateStake(localState, currentPlayer.id);
-    if (type === "viewPart") newState = activateViewPart(localState);
-    broadcast(newState);
-  };
-
-  // --------------------- UI ---------------------
-  return (
-    <div className="flex flex-col items-center p-4 text-white bg-slate-900 min-h-screen">
-      <h2 className="text-2xl font-bold mb-3">🧠 Memory Grid Challenge</h2>
-
-      {!started && isHost && (
-        <button
-          onClick={startGame}
-          className="bg-green-600 px-4 py-2 rounded hover:bg-green-700 mb-3"
-        >
-          Start Game
-        </button>
-      )}
-
-      {!started && !isHost && (
-        <p className="italic text-sm mb-3">Waiting for host to start…</p>
-      )}
-
-      <div className="flex gap-6">
-        <div>
-          <p className="text-sm mb-1">
-            Current Turn:{" "}
-            <span
-              style={{
-                color:
-                  gamePlayers.find((p) => p.id === currentPlayerId)?.color ||
-                  "#fff",
-              }}
-            >
-              {gamePlayers.find((p) => p.id === currentPlayerId)?.name}
-            </span>
-          </p>
-
-          <div
-            className="grid gap-1 border border-slate-600 p-2 rounded"
-            style={{
-              gridTemplateColumns: `repeat(${grid.length}, 45px)`,
-            }}
+  if (!localState && !gameState?.started) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        {showStartButton ? (
+          <button
+            onClick={handleStart}
+            className="px-6 py-2 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700"
           >
-            {grid.map((row, rowIndex) =>
-              row.map((tile) => (
-                <div
-                  key={tile.id + "-" + rowIndex}
-                  onClick={() => handleClick(tile.id)}
-                  className="w-[45px] h-[45px] rounded cursor-pointer border border-slate-700"
-                  style={{
-                    backgroundColor:
-                      showColors || tile.revealed
-                        ? tile.color || "#94a3b8"
-                        : "#1e293b",
-                  }}
-                />
-              ))
-            )}
-          </div>
+            Start Game
+          </button>
+        ) : (
+          <p className="text-gray-400">Waiting for host to start...</p>
+        )}
+      </div>
+    );
+  }
+
+  const current = gameState?.started ? gameState : localState;
+  if (!current) return null;
+
+  const { grid, currentPlayerId, players: gamePlayers } = current;
+  const me = gamePlayers.find((p) => p.id === currentPlayer.id);
+  const isMyTurn = currentPlayer.id === currentPlayerId;
+
+  const handleClick = async (tileId: string) => {
+    if (!isMyTurn || showGrid) return;
+    const newState = handleTileTap(current, currentPlayer.id, tileId);
+    onUpdateState(newState);
+    await syncToSupabase(newState);
+  };
+
+  const handleAbility = async (type: "paint" | "stake" | "viewPart") => {
+    let newState = current;
+    if (type === "paint") newState = activatePaint(current, currentPlayer.id, "");
+    if (type === "stake") newState = activateStake(current, currentPlayer.id);
+    if (type === "viewPart") newState = activateViewPart(current);
+    onUpdateState(newState);
+    await syncToSupabase(newState);
+  };
+
+  const playerColor = (id: string) =>
+    gamePlayers.find((p) => p.id === id)?.color || "#ccc";
+
+  return (
+    <div className="flex flex-col items-center p-4">
+      <h2 className="text-2xl font-bold mb-2">🧠 Memory Match</h2>
+      <p className="mb-4">
+        Current Turn:{" "}
+        <span
+          className="font-semibold"
+          style={{ color: playerColor(currentPlayerId) }}
+        >
+          {gamePlayers.find((p) => p.id === currentPlayerId)?.name}
+        </span>
+      </p>
+
+      {/* Game Layout */}
+      <div className="flex flex-row gap-6">
+        {/* Grid */}
+        <div
+          className="grid gap-2 border p-3 rounded-lg bg-gray-800"
+          style={{
+            gridTemplateColumns: `repeat(${grid.length}, 50px)`,
+          }}
+        >
+          {grid.flat().map((tile) => (
+            <div
+              key={tile.id}
+              onClick={() => handleClick(tile.id)}
+              className="w-12 h-12 rounded-md border cursor-pointer transition-all duration-200"
+              style={{
+                backgroundColor: tile.revealed
+                  ? tile.color || "#ddd"
+                  : "#1f2937",
+              }}
+            />
+          ))}
         </div>
 
         {/* Abilities */}
-        {started && (
-          <div className="flex flex-col gap-3 ml-6">
-            {me?.abilities.paint && (
+        {me && (
+          <div className="flex flex-col items-center gap-4 mt-4">
+            <div className="font-semibold text-gray-200 mb-2">Abilities</div>
+            {me.abilities.paint && (
               <button
                 onClick={() => handleAbility("paint")}
-                className="w-12 h-12 rounded-full bg-pink-600 hover:bg-pink-700 text-xl"
+                className="w-12 h-12 rounded-full bg-pink-500 hover:bg-pink-600 text-white text-xl"
+                title="Paint"
               >
                 🎨
               </button>
             )}
-            {me?.abilities.stake && (
+            {me.abilities.stake && (
               <button
                 onClick={() => handleAbility("stake")}
-                className="w-12 h-12 rounded-full bg-purple-600 hover:bg-purple-700 text-xl"
+                className="w-12 h-12 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-xl"
+                title="Stake"
               >
                 💎
               </button>
             )}
-            {me?.abilities.viewPart && (
+            {me.abilities.viewPart && (
               <button
                 onClick={() => handleAbility("viewPart")}
-                className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-xl"
+                className="w-12 h-12 rounded-full bg-green-500 hover:bg-green-600 text-white text-xl"
+                title="View"
               >
                 👁️
               </button>
@@ -185,22 +203,23 @@ const MemoryGame: React.FC<MemoryGameProps> = ({
       </div>
 
       {/* Scoreboard */}
-      <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+      <div className="mt-6 w-full max-w-md flex flex-col gap-2">
+        <h3 className="text-lg font-semibold text-center mb-2">Scores</h3>
         {gamePlayers.map((p) => (
           <div
             key={p.id}
-            className={`flex items-center rounded-lg p-2 ${
-              p.id === currentPlayerId ? "bg-slate-700" : "bg-slate-800"
+            className={`flex items-center justify-between px-3 py-2 rounded-lg bg-gray-700 text-white ${
+              p.id === currentPlayerId ? "border-2 border-yellow-400" : ""
             }`}
           >
-            <div
-              className="w-5 h-5 rounded mr-2"
-              style={{ backgroundColor: p.color }}
-            ></div>
-            <div>
-              <p className="font-semibold text-sm">{p.name}</p>
-              <p className="text-xs text-slate-400">{p.revealedCount} tiles</p>
+            <div className="flex items-center gap-2">
+              <div
+                className="w-5 h-5 rounded-full"
+                style={{ backgroundColor: p.color }}
+              ></div>
+              <span>{p.name}</span>
             </div>
+            <span className="text-sm">{p.revealedCount} tiles</span>
           </div>
         ))}
       </div>
