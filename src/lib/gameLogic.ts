@@ -2327,3 +2327,182 @@ export function handleDrawStack(state: UNOGameState): UNOGameState {
   }
   return state;
 }
+
+// gameLogic.ts
+
+export interface MemoryTile {
+  id: string;
+  ownerId?: string; // Player ID who owns this color
+  revealed: boolean;
+  color?: string;
+}
+
+export interface MemoryPlayer {
+  id: string;
+  name: string;
+  color: string;
+  revealedCount: number;
+  abilities: {
+    paint: boolean;
+    stake: boolean;
+    viewPart: boolean;
+  };
+}
+
+export interface MemoryGameState {
+  grid: MemoryTile[][];
+  players: MemoryPlayer[];
+  currentPlayerId: string;
+  started: boolean;
+  revealedForAll: boolean;
+  stakedBy?: string;
+  winnerIds: string[];
+}
+
+export const getGridSize = (numPlayers: number): number => {
+  if (numPlayers <= 2) return 7;
+  if (numPlayers <= 4) return 8;
+  return 9;
+};
+
+export const initMemoryGameState = (playerInfos: { id: string; name: string }[]): MemoryGameState => {
+  const numPlayers = playerInfos.length;
+  const size = getGridSize(numPlayers);
+  const totalTiles = size * size;
+
+  const colors = [
+    "#EF4444", "#3B82F6", "#10B981", "#F59E0B", "#8B5CF6",
+    "#EC4899", "#14B8A6", "#F97316", "#84CC16", "#06B6D4"
+  ];
+
+  const players: MemoryPlayer[] = playerInfos.map((p, i) => ({
+    ...p,
+    color: colors[i],
+    revealedCount: 0,
+    abilities: { paint: true, stake: true, viewPart: true },
+  }));
+
+  const grid: MemoryTile[][] = [];
+  const flatTiles: MemoryTile[] = [];
+  for (let i = 0; i < totalTiles; i++) {
+    flatTiles.push({ id: `t${i}`, revealed: false });
+  }
+
+  // Assign 8–15 random tiles to each player
+  players.forEach(player => {
+    const numTiles = Math.floor(Math.random() * 8) + 8;
+    const available = flatTiles.filter(t => !t.ownerId);
+    for (let i = 0; i < numTiles && available.length > 0; i++) {
+      const idx = Math.floor(Math.random() * available.length);
+      const tile = available[idx];
+      tile.ownerId = player.id;
+      tile.color = player.color;
+      available.splice(idx, 1);
+    }
+  });
+
+  // Create grid matrix
+  for (let i = 0; i < size; i++) {
+    grid.push(flatTiles.slice(i * size, (i + 1) * size));
+  }
+
+  return {
+    grid,
+    players,
+    currentPlayerId: players[0].id,
+    started: true,
+    revealedForAll: true,
+    winnerIds: [],
+  };
+};
+
+export const handleTileTap = (state: MemoryGameState, playerId: string, tileId: string): MemoryGameState => {
+  const newState = JSON.parse(JSON.stringify(state)) as MemoryGameState;
+  const { grid, players } = newState;
+  const tile = grid.flat().find(t => t.id === tileId);
+  if (!tile || tile.revealed) return newState;
+
+  const player = players.find(p => p.id === playerId);
+  if (!player) return newState;
+
+  if (tile.ownerId === playerId) {
+    tile.revealed = true;
+    player.revealedCount++;
+  } else {
+    tile.revealed = true;
+    setTimeout(() => (tile.revealed = false), 1000); // hide again later
+  }
+
+  // Check stake
+  if (newState.stakedBy && playerId !== newState.stakedBy) {
+    const staker = players.find(p => p.id === newState.stakedBy);
+    if (tile.ownerId === playerId && staker) {
+      const hiddenTiles = grid.flat().filter(t => t.ownerId === staker.id && !t.revealed);
+      if (hiddenTiles.length > 0) {
+        const randomTile = hiddenTiles[Math.floor(Math.random() * hiddenTiles.length)];
+        randomTile.revealed = true;
+        staker.revealedCount++;
+      }
+    }
+    newState.stakedBy = undefined;
+  }
+
+  // Check win
+  if (player.revealedCount === grid.flat().filter(t => t.ownerId === playerId).length) {
+    newState.winnerIds.push(playerId);
+  }
+
+  const nextIdx = (players.findIndex(p => p.id === playerId) + 1) % players.length;
+  newState.currentPlayerId = players[nextIdx].id;
+
+  return newState;
+};
+
+export const activatePaint = (state: MemoryGameState, playerId: string, tileId: string): MemoryGameState => {
+  const newState = JSON.parse(JSON.stringify(state)) as MemoryGameState;
+  const player = newState.players.find(p => p.id === playerId);
+  if (!player || !player.abilities.paint) return newState;
+
+  const tile = newState.grid.flat().find(t => t.id === tileId);
+  if (!tile || tile.ownerId) return newState;
+
+  // Convert blank tile to player color
+  tile.ownerId = player.id;
+  tile.color = player.color;
+
+  // Remove one of player's existing tiles
+  const owned = newState.grid.flat().filter(t => t.ownerId === player.id && !t.revealed);
+  if (owned.length > 0) {
+    const remove = owned[Math.floor(Math.random() * owned.length)];
+    remove.ownerId = undefined;
+    remove.color = undefined;
+  }
+
+  player.abilities.paint = false;
+  return newState;
+};
+
+export const activateStake = (state: MemoryGameState, stakerId: string): MemoryGameState => {
+  const newState = JSON.parse(JSON.stringify(state)) as MemoryGameState;
+  const player = newState.players.find(p => p.id === stakerId);
+  if (!player || !player.abilities.stake) return newState;
+  player.abilities.stake = false;
+  newState.stakedBy = stakerId;
+  return newState;
+};
+
+export const activateViewPart = (state: MemoryGameState): MemoryGameState => {
+  const newState = JSON.parse(JSON.stringify(state)) as MemoryGameState;
+  const tiles = newState.grid.flat();
+  const toReveal = tiles.filter(t => !t.revealed);
+  const count = Math.min(6, Math.floor(Math.random() * 3) + 4);
+  for (let i = 0; i < count; i++) {
+    const idx = Math.floor(Math.random() * toReveal.length);
+    const tile = toReveal[idx];
+    if (!tile) continue;
+    tile.revealed = true;
+    setTimeout(() => (tile.revealed = false), 3000);
+  }
+  newState.players.forEach(p => (p.abilities.viewPart = false));
+  return newState;
+};
