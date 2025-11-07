@@ -2373,7 +2373,7 @@ const COLORS = [
   "#10b981", // emerald
   "#f97316", // orange
   "#06b6d4", // teal
-  "#374151"  // slate (10th)
+  "#374151",  // slate (10th)
   "#8b5cf6", // purple
   "#ec4899", // pink
   
