@@ -51,9 +51,9 @@ export const GAMES = [
     minPlayers: 3
   },
     {
-    id: 'uno',
-    name: 'UNO',
-    description: 'Stack cards, skip, reverse, and unleash chaos! Draw even when you can play!',
+    id: 'memory',
+    name: 'Grid GOAT',
+    description: 'Remember,manipulate and conquer',
     emoji: '🃏',
     minPlayers: 2
   }
