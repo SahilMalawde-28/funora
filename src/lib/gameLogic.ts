@@ -2424,24 +2424,26 @@ export const initMemoryGameState = (playersInput: { id: string; name: string }[]
   }));
 
   // Assign initial owned tile counts per player: random between 8 and 15, but ensure sum <= totalCells
-  const minPer = 8;
-  const maxPer = 15;
-  const desiredCounts: number[] = playerStates.map(() => randInt(minPer, maxPer));
-  let sum = desiredCounts.reduce((s, v) => s + v, 0);
+ const minPer = 8;
+const maxPer = 15;
 
-  // if too many assigned, scale down proportionally
-  if (sum > totalCells) {
-    // simple reduction loop: reduce each until sum <= totalCells
-    let i = 0;
-    while (sum > totalCells && i < desiredCounts.length) {
-      if (desiredCounts[i] > minPer) {
-        desiredCounts[i]--;
-        sum--;
-      } else {
-        i++;
-        if (i >= desiredCounts.length) i = 0;
-      }
-    }
+// total grid cells
+const totalCells = gridSize * gridSize;
+
+// pick one random per-player count for all players
+let perPlayer = randInt(minPer, maxPer);
+
+// calculate total assigned
+let totalAssigned = perPlayer * playerStates.length;
+
+// ensure at least 10 tiles are left uncolored
+if (totalAssigned > totalCells - 10) {
+  // reduce perPlayer so that 10 colorless remain minimum
+  perPlayer = Math.floor((totalCells - 10) / playerStates.length);
+}
+
+// now everyone gets equal number of tiles
+const desiredCounts = playerStates.map(() => perPlayer);
   }
 
   // create flat array of owners (playerId or null) length totalCells
