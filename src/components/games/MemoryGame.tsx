@@ -201,7 +201,7 @@ const MemoryGame: React.FC<MemoryGameProps> = ({ room, players, currentPlayer, g
   const flatTiles = localState.grid.flat();
 
   return (
-    <div style={{ padding: 20 }}>
+    <div style={{ padding: 20 ,background: "#0f172a", minHeight: "100vh", color: "#e5e7eb" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
