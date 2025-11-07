@@ -9,9 +9,6 @@ import {
   MemoryGameState,
 } from "../../lib/gameLogic";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-
 interface MemoryGameProps {
   room: any;
   players: any[];
@@ -58,60 +55,132 @@ const MemoryGame: React.FC<MemoryGameProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 p-4">
-      <h2 className="text-xl font-semibold">🎯 Memory Grid</h2>
-      <p className="text-sm">
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "16px",
+        padding: "16px",
+        fontFamily: "sans-serif",
+      }}
+    >
+      <h2 style={{ fontSize: "22px", fontWeight: "600" }}>🎯 Memory Grid</h2>
+      <p style={{ fontSize: "14px" }}>
         Current Turn:{" "}
-        <span className="font-bold" style={{ color: gamePlayers.find(p => p.id === currentPlayerId)?.color }}>
-          {gamePlayers.find(p => p.id === currentPlayerId)?.name}
+        <span
+          style={{
+            fontWeight: "bold",
+            color: gamePlayers.find((p) => p.id === currentPlayerId)?.color,
+          }}
+        >
+          {gamePlayers.find((p) => p.id === currentPlayerId)?.name}
         </span>
       </p>
 
       <div
-        className="grid gap-1"
         style={{
-          gridTemplateColumns: `repeat(${grid.length}, 40px)`,
+          display: "grid",
+          gap: "6px",
+          gridTemplateColumns: `repeat(${grid.length}, 45px)`,
+          justifyContent: "center",
         }}
       >
         {grid.flat().map((tile) => (
           <div
             key={tile.id}
             onClick={() => handleClick(tile.id)}
-            className={`w-10 h-10 border rounded cursor-pointer`}
             style={{
-              backgroundColor: tile.revealed ? tile.color || "#f0f0f0" : "#1e293b",
+              width: "45px",
+              height: "45px",
+              borderRadius: "6px",
+              backgroundColor: tile.revealed
+                ? tile.color || "#d1d5db"
+                : "#1e293b",
+              border: "1px solid #475569",
+              cursor: isMyTurn ? "pointer" : "not-allowed",
+              transition: "background-color 0.2s ease",
             }}
           />
         ))}
       </div>
 
       {isMyTurn && (
-        <div className="flex gap-2 mt-3">
+        <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
           {me?.abilities.paint && (
-            <Button onClick={() => handleAbility("paint")}>🎨 Paint</Button>
+            <button
+              onClick={() => handleAbility("paint")}
+              style={buttonStyle("#f97316")}
+            >
+              🎨 Paint
+            </button>
           )}
           {me?.abilities.stake && (
-            <Button onClick={() => handleAbility("stake")}>💎 Stake</Button>
+            <button
+              onClick={() => handleAbility("stake")}
+              style={buttonStyle("#22c55e")}
+            >
+              💎 Stake
+            </button>
           )}
           {me?.abilities.viewPart && (
-            <Button onClick={() => handleAbility("viewPart")}>👁️ View</Button>
+            <button
+              onClick={() => handleAbility("viewPart")}
+              style={buttonStyle("#3b82f6")}
+            >
+              👁️ View
+            </button>
           )}
         </div>
       )}
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+          gap: "8px",
+          width: "100%",
+          maxWidth: "500px",
+          marginTop: "20px",
+        }}
+      >
         {gamePlayers.map((p) => (
-          <Card
+          <div
             key={p.id}
-            className={`p-2 text-center ${p.id === currentPlayerId ? "border-2 border-yellow-400" : ""}`}
+            style={{
+              padding: "8px",
+              borderRadius: "8px",
+              textAlign: "center",
+              backgroundColor: "#0f172a",
+              color: "white",
+              border:
+                p.id === currentPlayerId
+                  ? "2px solid gold"
+                  : "1px solid #334155",
+            }}
           >
-            <p style={{ color: p.color }}>{p.name}</p>
-            <p className="text-xs">{p.revealedCount} found</p>
-          </Card>
+            <p style={{ color: p.color, fontWeight: "bold" }}>{p.name}</p>
+            <p style={{ fontSize: "12px", opacity: 0.8 }}>
+              {p.revealedCount} found
+            </p>
+          </div>
         ))}
       </div>
     </div>
   );
 };
+
+// Inline button style helper
+const buttonStyle = (color: string): React.CSSProperties => ({
+  backgroundColor: color,
+  border: "none",
+  padding: "8px 14px",
+  color: "white",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: 500,
+  transition: "transform 0.1s ease",
+  boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
+});
 
 export default MemoryGame;
