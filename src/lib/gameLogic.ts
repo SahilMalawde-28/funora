@@ -2330,127 +2330,304 @@ export function handleDrawStack(state: UNOGameState): UNOGameState {
 
 // gameLogic.ts
 
-export interface Tile {
-  id: number;
-  color?: string;
-  revealed: boolean;
-  matched: boolean;
-}
+// lib/gameLogic.ts
+export type Tile = {
+  id: string;
+  ownerId: string | null; // which player owns it (assigned at init) or null = colorless
+  color: string | null;
+  revealed: boolean; // permanently revealed (clicked)
+  tempRevealed?: boolean; // used for VIEW ability visual reveal (transient)
+};
 
-export interface MemoryGameState {
-  grid: Tile[][];
-  gridSize: number;
-  currentTurn: string;
-  revealedTiles: number[];
-  matchedPairs: number[];
-  scores: Record<string, number>;
+export type PlayerState = {
+  id: string;
+  name: string;
+  color: string;
+  revealedCount: number; // tiles revealed that belong to this player
+  ownedCount: number; // how many tiles were assigned to this player initially
+  abilities: { paint: number; stake: number; view: number }; // uses left
+};
+
+export type MemoryGameState = {
   started: boolean;
-}
+  grid: Tile[][];
+  players: PlayerState[];
+  turnOrder: string[]; // player ids in order
+  turnIndex: number; // index into turnOrder for current player's turn
+  stake?: { stakerId: string; active: boolean }; // active stake
+  viewTiles?: string[]; // tile ids currently temporarily revealed (for view ability)
+  config: {
+    gridSize: number;
+    minPerPlayer: number;
+    maxPerPlayer: number;
+  };
+  // meta:
+  createdAt: number;
+};
 
 const COLORS = [
-  "#ef4444", "#f97316", "#facc15", "#22c55e", "#3b82f6",
-  "#8b5cf6", "#ec4899", "#14b8a6", "#f59e0b", "#64748b"
+  "#ef4444", // red
+  "#f97316", // orange
+  "#f59e0b", // amber
+  "#84cc16", // lime
+  "#10b981", // emerald
+  "#06b6d4", // teal
+  "#3b82f6", // blue
+  "#8b5cf6", // purple
+  "#ec4899", // pink
+  "#374151"  // slate (10th)
 ];
 
-/**
- * Initialize Memory Game State — used from the lobby (like initBluffGame, initBoilingWaterGame)
- */
-export const initMemoryGameState = (players: { id: string; name: string }[]): MemoryGameState => {
-  const gridSize = players.length > 5 ? 9 : 7;
-  const grid = createInitialGrid(gridSize, COLORS);
+const randInt = (min: number, max: number) =>
+  Math.floor(Math.random() * (max - min + 1)) + min;
 
-  return {
-    grid,
-    gridSize,
-    currentTurn: players[0].id,
-    revealedTiles: [],
-    matchedPairs: [],
-    scores: Object.fromEntries(players.map(p => [p.id, 0])),
-    started: false, // stays false until host clicks start
-  };
+export const shuffleArray = <T,>(arr: T[]) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
+const uid = (prefix = "") =>
+  prefix + Math.random().toString(36).slice(2, 9);
+
+// Choose grid size based on number of players
+const chooseGridSize = (numPlayers: number) => {
+  if (numPlayers <= 2) return 7;
+  if (numPlayers <= 4) return 8;
+  return 9;
 };
 
 /**
- * Creates randomized grid of colored tiles
+ * Initialize MemoryGameState
+ * players input: array of { id: string, name: string }
  */
-export const createInitialGrid = (size: number, colors: string[]): Tile[][] => {
-  const totalTiles = size * size;
-  const totalPairs = Math.floor(totalTiles / 2);
-  const selectedColors = colors.slice(0, totalPairs);
-  const pairs = [...selectedColors, ...selectedColors];
-  const shuffled = pairs.sort(() => Math.random() - 0.5);
+export const initMemoryGameState = (playersInput: { id: string; name: string }[]): MemoryGameState => {
+  if (!playersInput || playersInput.length === 0) throw new Error("Need players to init game");
+  const gridSize = chooseGridSize(playersInput.length);
+  const totalCells = gridSize * gridSize;
 
+  // assign colors to players (up to 10)
+  const playersShuffled = shuffleArray(playersInput);
+  const usePlayers = playersShuffled.slice(0, Math.min(playersShuffled.length, COLORS.length));
+
+  // build initial PlayerState array
+  const playerStates: PlayerState[] = usePlayers.map((p, idx) => ({
+    id: p.id,
+    name: p.name,
+    color: COLORS[idx % COLORS.length],
+    revealedCount: 0,
+    ownedCount: 0, // set below
+    abilities: { paint: 1, stake: 1, view: 1 },
+  }));
+
+  // Assign initial owned tile counts per player: random between 8 and 15, but ensure sum <= totalCells
+  const minPer = 8;
+  const maxPer = 15;
+  const desiredCounts: number[] = playerStates.map(() => randInt(minPer, maxPer));
+  let sum = desiredCounts.reduce((s, v) => s + v, 0);
+
+  // if too many assigned, scale down proportionally
+  if (sum > totalCells) {
+    // simple reduction loop: reduce each until sum <= totalCells
+    let i = 0;
+    while (sum > totalCells && i < desiredCounts.length) {
+      if (desiredCounts[i] > minPer) {
+        desiredCounts[i]--;
+        sum--;
+      } else {
+        i++;
+        if (i >= desiredCounts.length) i = 0;
+      }
+    }
+  }
+
+  // create flat array of owners (playerId or null) length totalCells
+  const ownerPool: (string | null)[] = [];
+  playerStates.forEach((ps, idx) => {
+    for (let k = 0; k < desiredCounts[idx]; k++) ownerPool.push(ps.id);
+    ps.ownedCount = desiredCounts[idx];
+  });
+  // remaining cells are colorless
+  while (ownerPool.length < totalCells) ownerPool.push(null);
+
+  // shuffle owner pool and fill grid
+  const shuffledOwners = shuffleArray(ownerPool);
   const grid: Tile[][] = [];
-  let id = 1;
-  for (let r = 0; r < size; r++) {
+  let ptr = 0;
+  for (let r = 0; r < gridSize; r++) {
     const row: Tile[] = [];
-    for (let c = 0; c < size; c++) {
+    for (let c = 0; c < gridSize; c++) {
+      const ownerId = shuffledOwners[ptr] === null ? null : (shuffledOwners[ptr] as string);
+      const color = ownerId ? playerStates.find(p => p.id === ownerId)!.color : null;
       row.push({
-        id: id++,
-        color: shuffled[(r * size + c) % shuffled.length],
-        revealed: false,
-        matched: false,
+        id: uid("t_"),
+        ownerId,
+        color,
+        revealed: true // initial preview: all shown for 5s; later component will hide them
       });
+      ptr++;
     }
     grid.push(row);
   }
-  return grid;
-};
 
-/**
- * Reveals a clicked tile
- */
-export const revealTile = (state: MemoryGameState, tileId: number): MemoryGameState => {
-  const newGrid = state.grid.map(row =>
-    row.map(tile =>
-      tile.id === tileId ? { ...tile, revealed: true } : tile
-    )
-  );
-  return { ...state, grid: newGrid, revealedTiles: [...state.revealedTiles, tileId] };
-};
-
-/**
- * Checks if two revealed tiles match, updates score & turn
- */
-export const checkMatch = (state: MemoryGameState, currentPlayerId: string): MemoryGameState => {
-  const [firstId, secondId] = state.revealedTiles;
-  if (!firstId || !secondId) return state;
-
-  const flatGrid = state.grid.flat();
-  const firstTile = flatGrid.find(t => t.id === firstId);
-  const secondTile = flatGrid.find(t => t.id === secondId);
-
-  let newGrid = state.grid.map(row => row.map(t => ({ ...t })));
-  let newScores = { ...state.scores };
-  let nextTurn = currentPlayerId;
-
-  if (firstTile?.color === secondTile?.color) {
-    newGrid = newGrid.map(row =>
-      row.map(tile =>
-        tile.id === firstId || tile.id === secondId
-          ? { ...tile, matched: true }
-          : tile
-      )
-    );
-    newScores[currentPlayerId] = (newScores[currentPlayerId] || 0) + 1;
-  } else {
-    newGrid = newGrid.map(row =>
-      row.map(tile =>
-        tile.id === firstId || tile.id === secondId
-          ? { ...tile, revealed: false }
-          : tile
-      )
-    );
-    const currentIdx = Object.keys(state.scores).indexOf(currentPlayerId);
-    const nextIdx = (currentIdx + 1) % Object.keys(state.scores).length;
-    nextTurn = Object.keys(state.scores)[nextIdx];
-  }
+  const turnOrder = shuffleArray(playerStates.map(p => p.id));
 
   return {
-    ...state,
-    grid: newGrid,
-    revealedTiles: [],
-    scores: newScores,
-    currentTurn: nextTurn,
+    started: false,
+    grid,
+    players: playerStates,
+    turnOrder,
+    turnIndex: 0,
+    stake: { stakerId: "", active: false },
+    viewTiles: [],
+    config: { gridSize, minPerPlayer: minPer, maxPerPlayer: maxPer },
+    createdAt: Date.now()
   };
+};
+
+/**
+ * Reveal a tile (player tap). Returns new state copy.
+ *
+ * Rules implemented:
+ * - Only allow tap if it's the tapping player's turn
+ * - If tile already revealed -> no op
+ * - If tile.ownerId === tapping player => increment that player's revealedCount and award 1 point
+ * - If tile has a different owner => that owner gets their tile revealed (counts towards their score)
+ * - If stake.active and the clicked tile belongs to the clicking player (i.e., they found their own tile),
+ *   then find staker and reveal one random unrevealed tile belonging to the staker (stake reward).
+ * - Advance turnIndex (wrap-around)
+ */
+export const handleTileTap = (state: MemoryGameState, playerId: string, tileId: string): MemoryGameState => {
+  // shallow clone top-level
+  const next: MemoryGameState = { ...state, grid: state.grid.map(row => row.map(t => ({ ...t }))), players: state.players.map(p => ({ ...p })) };
+
+  const { turnOrder, turnIndex } = next;
+  const currentPlayerId = turnOrder[turnIndex];
+  if (playerId !== currentPlayerId) return next; // not your turn, ignore
+
+  // find tile
+  let found = false;
+  outer: for (let r = 0; r < next.grid.length; r++) {
+    for (let c = 0; c < next.grid[r].length; c++) {
+      const t = next.grid[r][c];
+      if (t.id === tileId) {
+        if (t.revealed) break outer; // already permanently revealed -> ignore
+        // reveal it permanently
+        t.revealed = true;
+        found = true;
+        const ownerId = t.ownerId;
+        if (ownerId) {
+          // owner receives the reveal (point)
+          const owner = next.players.find(p => p.id === ownerId);
+          if (owner) owner.revealedCount = (owner.revealedCount || 0) + 1;
+        }
+        // stake handling: if someone has stake active and tapped tile belongs to tapping player (they found own tile),
+        // reveal one random unrevealed tile belonging to staker
+        if (next.stake && next.stake.active && next.stake.stakerId) {
+          // if the clicked tile belongs to the clicking player (i.e., ownerId === playerId)
+          if (ownerId === playerId) {
+            const staker = next.players.find(p => p.id === next.stake!.stakerId);
+            if (staker) {
+              // find random unrevealed tile belonging to staker
+              const stakerTiles: Tile[] = [];
+              for (const row of next.grid) for (const tt of row) if (tt.ownerId === staker.id && !tt.revealed) stakerTiles.push(tt);
+              if (stakerTiles.length > 0) {
+                const pick = stakerTiles[Math.floor(Math.random() * stakerTiles.length)];
+                pick.revealed = true;
+                staker.revealedCount = (staker.revealedCount || 0) + 1;
+              }
+            }
+          }
+          // clear stake (one time)
+          next.stake = { stakerId: "", active: false };
+        }
+        break outer;
+      }
+    }
+  }
+
+  if (!found) return next;
+
+  // advance turn
+  const nextIndex = (turnIndex + 1) % turnOrder.length;
+  next.turnIndex = nextIndex;
+
+  return next;
+};
+
+/**
+ * Paint ability:
+ * - Choose one random colorless (ownerId === null && !revealed) tile and assign it to player
+ * - Choose one random tile owned by player that is not revealed and make it colorless (ownerId = null)
+ * - Decrement ability use
+ */
+export const activatePaint = (state: MemoryGameState, playerId: string): MemoryGameState => {
+  const next: MemoryGameState = { ...state, grid: state.grid.map(r => r.map(t => ({ ...t }))), players: state.players.map(p => ({ ...p })) };
+  const me = next.players.find(p => p.id === playerId);
+  if (!me || me.abilities.paint <= 0) return next;
+
+  // find available colorless unrevealed tiles
+  const colorless: Tile[] = [];
+  for (const row of next.grid) for (const t of row) if (!t.revealed && !t.ownerId) colorless.push(t);
+  if (colorless.length > 0) {
+    const pick = colorless[Math.floor(Math.random() * colorless.length)];
+    pick.ownerId = me.id;
+    pick.color = me.color;
+    me.ownedCount = (me.ownedCount || 0) + 1;
+  }
+
+  // now remove one random unrevealed tile of the player (if any)
+  const ownUnrevealed: Tile[] = [];
+  for (const row of next.grid) for (const t of row) if (!t.revealed && t.ownerId === me.id) ownUnrevealed.push(t);
+  if (ownUnrevealed.length > 0) {
+    const toRemove = ownUnrevealed[Math.floor(Math.random() * ownUnrevealed.length)];
+    toRemove.ownerId = null;
+    toRemove.color = null;
+    me.ownedCount = Math.max(0, (me.ownedCount || 1) - 1);
+  }
+
+  me.abilities.paint = Math.max(0, me.abilities.paint - 1);
+  return next;
+};
+
+/**
+ * Stake ability:
+ * - Marks stake active for the staker. If during someone else's turn that player reveals their OWN tile,
+ *   the staker gets one of their unrevealed tiles revealed (done in handleTileTap).
+ * - Decrement ability use
+ */
+export const activateStake = (state: MemoryGameState, playerId: string): MemoryGameState => {
+  const next: MemoryGameState = { ...state, grid: state.grid.map(r => r.map(t => ({ ...t }))), players: state.players.map(p => ({ ...p })) };
+  const me = next.players.find(p => p.id === playerId);
+  if (!me || me.abilities.stake <= 0) return next;
+
+  next.stake = { stakerId: me.id, active: true };
+  me.abilities.stake = Math.max(0, me.abilities.stake - 1);
+  return next;
+};
+
+/**
+ * View part ability:
+ * - pick ~25% tiles at random (or up to 15) and return state with viewTiles set
+ * - component should present them for 3s and then call onUpdateState to clear them
+ */
+export const activateViewPart = (state: MemoryGameState, playerId?: string): MemoryGameState => {
+  const next: MemoryGameState = { ...state, grid: state.grid.map(r => r.map(t => ({ ...t }))), players: state.players.map(p => ({ ...p })) };
+  const me = playerId ? next.players.find(p => p.id === playerId) : undefined;
+  if (me && me.abilities.view <= 0) return next;
+
+  // build flat list of unrevealed tile ids (also include revealed? spec said show some tiles - show random tiles irrespective)
+  const allTiles: Tile[] = [];
+  for (const row of next.grid) for (const t of row) if (!t.revealed) allTiles.push(t);
+
+  const count = Math.min(15, Math.max(3, Math.floor(next.grid.length * next.grid.length * 0.25)));
+  const shuffled = shuffleArray(allTiles);
+  const selected = shuffled.slice(0, count).map(t => t.id);
+  next.viewTiles = selected;
+
+  if (me) me.abilities.view = Math.max(0, me.abilities.view - 1);
+  return next;
 };
