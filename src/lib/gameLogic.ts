@@ -2424,7 +2424,7 @@ export const initMemoryGameState = (playersInput: { id: string; name: string }[]
   }));
 
   // Assign initial owned tile counts per player: random between 8 and 15, but ensure sum <= totalCells
- const minPer = 8;
+const minPer = 8;
 const maxPer = 15;
 
 
@@ -2443,7 +2443,7 @@ if (totalAssigned > totalCells - 10) {
 
 // now everyone gets equal number of tiles
 const desiredCounts = playerStates.map(() => perPlayer);
-  }
+  
 
   // create flat array of owners (playerId or null) length totalCells
   const ownerPool: (string | null)[] = [];
