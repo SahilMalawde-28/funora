@@ -158,7 +158,7 @@ const MemoryGame: React.FC<MemoryGameProps> = ({ room, players, currentPlayer, g
   if (!localState) {
     // before start: show start button to host, else waiting text
     return (
-      <div style={{ padding: 24 ,background:"#9ca3af"}}>
+      <div style={{ padding: 24 ,background: "#0f172a", minHeight: "100vh", color: "#e5e7eb" }}>
         <div style={{ maxWidth: 960, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
