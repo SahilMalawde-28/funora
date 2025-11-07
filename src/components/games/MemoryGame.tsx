@@ -1,4 +1,3 @@
-// MemoryGame.tsx
 import React, { useEffect, useState } from "react";
 import {
   initMemoryGameState,
@@ -17,170 +16,152 @@ interface MemoryGameProps {
   onUpdateState: (newState: Partial<MemoryGameState>) => void;
 }
 
-const MemoryGame: React.FC<MemoryGameProps> = ({
+export default function MemoryGame({
   room,
   players,
   currentPlayer,
   gameState,
   onUpdateState,
-}) => {
+}: MemoryGameProps) {
   const [localState, setLocalState] = useState<MemoryGameState | null>(gameState);
+  const [previewTime, setPreviewTime] = useState(5);
 
+  // Initialize new game if not started
   useEffect(() => {
     if (!gameState?.started && players.length > 0) {
-      const newState = initMemoryGameState(players.map((p) => ({ id: p.id, name: p.name })));
+      const newState = initMemoryGameState(players);
       onUpdateState(newState);
     } else {
       setLocalState(gameState);
     }
   }, [gameState, players]);
 
+  // Preview countdown (first 5 seconds)
+  useEffect(() => {
+    if (localState?.phase === "preview" && previewTime > 0) {
+      const timer = setTimeout(() => setPreviewTime(previewTime - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+    if (previewTime === 0 && localState?.phase === "preview") {
+      onUpdateState({ phase: "playing" });
+    }
+  }, [previewTime, localState]);
+
   if (!localState) return null;
-  const { grid, currentPlayerId, players: gamePlayers } = localState;
+
+  const { grid, currentPlayerId, players: gamePlayers, phase } = localState;
   const me = gamePlayers.find((p) => p.id === currentPlayer.id);
   const isMyTurn = currentPlayer.id === currentPlayerId;
 
   const handleClick = (tileId: string) => {
-    if (!isMyTurn) return;
+    if (!isMyTurn || phase !== "playing") return;
     const newState = handleTileTap(localState, currentPlayer.id, tileId);
     onUpdateState(newState);
   };
 
   const handleAbility = (type: "paint" | "stake" | "viewPart") => {
     let newState = localState;
-    if (type === "paint") newState = activatePaint(localState, currentPlayer.id, "");
+    if (type === "paint") newState = activatePaint(localState, currentPlayer.id);
     if (type === "stake") newState = activateStake(localState, currentPlayer.id);
     if (type === "viewPart") newState = activateViewPart(localState);
     onUpdateState(newState);
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "16px",
-        padding: "16px",
-        fontFamily: "sans-serif",
-      }}
-    >
-      <h2 style={{ fontSize: "22px", fontWeight: "600" }}>🎯 Memory Grid</h2>
-      <p style={{ fontSize: "14px" }}>
-        Current Turn:{" "}
-        <span
-          style={{
-            fontWeight: "bold",
-            color: gamePlayers.find((p) => p.id === currentPlayerId)?.color,
-          }}
-        >
-          {gamePlayers.find((p) => p.id === currentPlayerId)?.name}
-        </span>
-      </p>
+    <div style={{ textAlign: "center", padding: 20 }}>
+      <h2>🎯 Memory Grid</h2>
+
+      {phase === "preview" && (
+        <p style={{ color: "orange", fontWeight: "bold" }}>
+          Memorize the grid! Game starts in {previewTime}s
+        </p>
+      )}
+
+      {phase === "playing" && (
+        <p>
+          Current Turn:{" "}
+          <span style={{ color: gamePlayers.find(p => p.id === currentPlayerId)?.color }}>
+            {gamePlayers.find(p => p.id === currentPlayerId)?.name}
+          </span>
+        </p>
+      )}
 
       <div
         style={{
           display: "grid",
+          gridTemplateColumns: `repeat(${grid.length}, 50px)`,
           gap: "6px",
-          gridTemplateColumns: `repeat(${grid.length}, 45px)`,
           justifyContent: "center",
+          marginTop: "10px",
         }}
       >
-        {grid.flat().map((tile) => (
+        {grid.flat().map((tile, idx) => (
           <div
-            key={tile.id}
+            key={`${tile.id}-${idx}`}
             onClick={() => handleClick(tile.id)}
             style={{
-              width: "45px",
-              height: "45px",
-              borderRadius: "6px",
-              backgroundColor: tile.revealed
-                ? tile.color || "#d1d5db"
-                : "#1e293b",
-              border: "1px solid #475569",
+              width: 50,
+              height: 50,
+              borderRadius: 6,
+              backgroundColor:
+                phase === "preview"
+                  ? tile.color
+                  : tile.revealed
+                  ? tile.color || "#f0f0f0"
+                  : "#1e293b",
+              border: "1px solid #555",
               cursor: isMyTurn ? "pointer" : "not-allowed",
-              transition: "background-color 0.2s ease",
             }}
           />
         ))}
       </div>
 
       {isMyTurn && (
-        <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
+        <div style={{ marginTop: 10 }}>
           {me?.abilities.paint && (
-            <button
-              onClick={() => handleAbility("paint")}
-              style={buttonStyle("#f97316")}
-            >
+            <button onClick={() => handleAbility("paint")} style={btnStyle}>
               🎨 Paint
             </button>
           )}
           {me?.abilities.stake && (
-            <button
-              onClick={() => handleAbility("stake")}
-              style={buttonStyle("#22c55e")}
-            >
+            <button onClick={() => handleAbility("stake")} style={btnStyle}>
               💎 Stake
             </button>
           )}
           {me?.abilities.viewPart && (
-            <button
-              onClick={() => handleAbility("viewPart")}
-              style={buttonStyle("#3b82f6")}
-            >
-              👁️ View
+            <button onClick={() => handleAbility("viewPart")} style={btnStyle}>
+              👁️ View Part
             </button>
           )}
         </div>
       )}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
-          gap: "8px",
-          width: "100%",
-          maxWidth: "500px",
-          marginTop: "20px",
-        }}
-      >
+      <div style={{ marginTop: 15, display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 6 }}>
         {gamePlayers.map((p) => (
           <div
             key={p.id}
             style={{
-              padding: "8px",
-              borderRadius: "8px",
-              textAlign: "center",
-              backgroundColor: "#0f172a",
-              color: "white",
-              border:
-                p.id === currentPlayerId
-                  ? "2px solid gold"
-                  : "1px solid #334155",
+              border: p.id === currentPlayerId ? "2px solid gold" : "1px solid gray",
+              padding: "5px",
+              borderRadius: "6px",
+              color: p.color,
+              backgroundColor: "#111",
             }}
           >
-            <p style={{ color: p.color, fontWeight: "bold" }}>{p.name}</p>
-            <p style={{ fontSize: "12px", opacity: 0.8 }}>
-              {p.revealedCount} found
-            </p>
+            <strong>{p.name}</strong> — {p.revealedCount} found
           </div>
         ))}
       </div>
     </div>
   );
-};
+}
 
-// Inline button style helper
-const buttonStyle = (color: string): React.CSSProperties => ({
-  backgroundColor: color,
-  border: "none",
-  padding: "8px 14px",
+const btnStyle: React.CSSProperties = {
+  margin: "0 5px",
+  padding: "6px 12px",
+  background: "#444",
   color: "white",
-  borderRadius: "8px",
+  border: "none",
+  borderRadius: "6px",
   cursor: "pointer",
-  fontWeight: 500,
-  transition: "transform 0.1s ease",
-  boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
-});
-
-export default MemoryGame;
+};
