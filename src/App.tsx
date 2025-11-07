@@ -154,8 +154,8 @@ function App() {
       case 'boilingWater':
         gameState = initBoilingWaterGame(playerIds);
         break;
-      case 'uno':
-        gameState = initUnoGame(playerIds);
+      case 'memory':
+        gameState = initMemoryGame(playerIds);
         break;
       default:
         return;
