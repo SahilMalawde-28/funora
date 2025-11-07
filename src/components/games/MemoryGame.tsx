@@ -7,7 +7,7 @@ import {
   activateStake,
   activateViewPart,
   MemoryGameState,
-} from "../lib/gameLogic";
+} from "../../lib/gameLogic";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
