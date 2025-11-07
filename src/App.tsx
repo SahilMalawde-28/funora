@@ -245,8 +245,8 @@ function App() {
       return <ChainGame {...gameProps} />;
     case 'boilingWater':                      // ✅ NEW
       return <BoilingGame {...gameProps} />;
-    case 'uno':                      // ✅ NEW
-      return <UnoGame {...gameProps} />;
+    case 'memory':                      // ✅ NEW
+      return <MemoryGame {...gameProps} />;
     default:
       return (
         <Lobby
