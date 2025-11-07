@@ -2330,14 +2330,13 @@ export function handleDrawStack(state: UNOGameState): UNOGameState {
 
 // gameLogic.ts
 
-export interface MemoryTile {
+export interface Tile {
   id: string;
-  ownerId?: string; // Player ID who owns this color
-  revealed: boolean;
   color?: string;
+  revealed: boolean;
 }
 
-export interface MemoryPlayer {
+export interface Player {
   id: string;
   name: string;
   color: string;
@@ -2350,159 +2349,116 @@ export interface MemoryPlayer {
 }
 
 export interface MemoryGameState {
-  grid: MemoryTile[][];
-  players: MemoryPlayer[];
-  currentPlayerId: string;
   started: boolean;
-  revealedForAll: boolean;
-  stakedBy?: string;
-  winnerIds: string[];
+  currentPlayerId: string;
+  players: Player[];
+  grid: Tile[][];
 }
 
-export const getGridSize = (numPlayers: number): number => {
-  if (numPlayers <= 2) return 7;
-  if (numPlayers <= 4) return 8;
-  return 9;
-};
+const COLORS = [
+  "#e11d48",
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#ef4444",
+  "#14b8a6",
+  "#84cc16",
+  "#a855f7",
+  "#f97316",
+];
 
-export const initMemoryGameState = (playerInfos: { id: string; name: string }[]): MemoryGameState => {
-  const numPlayers = playerInfos.length;
-  const size = getGridSize(numPlayers);
-  const totalTiles = size * size;
+const randomId = () => Math.random().toString(36).substring(2, 9);
 
-  const colors = [
-    "#EF4444", "#3B82F6", "#10B981", "#F59E0B", "#8B5CF6",
-    "#EC4899", "#14B8A6", "#F97316", "#84CC16", "#06B6D4"
-  ];
-
-  const players: MemoryPlayer[] = playerInfos.map((p, i) => ({
-    ...p,
-    color: colors[i],
+export function initMemoryGameState(playersInput: any[]): MemoryGameState {
+  const players = playersInput.map((p, i) => ({
+    id: p.id,
+    name: p.name,
+    color: COLORS[i % COLORS.length],
     revealedCount: 0,
     abilities: { paint: true, stake: true, viewPart: true },
   }));
 
-  const grid: MemoryTile[][] = [];
-  const flatTiles: MemoryTile[] = [];
-  for (let i = 0; i < totalTiles; i++) {
-    flatTiles.push({ id: `t${i}`, revealed: false });
-  }
+  const numPlayers = players.length;
+  const gridSize = numPlayers <= 3 ? 7 : numPlayers <= 5 ? 8 : 9;
+  const totalTiles = gridSize * gridSize;
 
-  // Assign 8–15 random tiles to each player
-  players.forEach(player => {
-    const numTiles = Math.floor(Math.random() * 8) + 8;
-    const available = flatTiles.filter(t => !t.ownerId);
-    for (let i = 0; i < numTiles && available.length > 0; i++) {
-      const idx = Math.floor(Math.random() * available.length);
-      const tile = available[idx];
-      tile.ownerId = player.id;
-      tile.color = player.color;
-      available.splice(idx, 1);
+  const tiles: Tile[] = Array.from({ length: totalTiles }, () => ({
+    id: randomId(),
+    revealed: false,
+  }));
+
+  const colorTiles = Math.floor(totalTiles / numPlayers);
+  let assigned = 0;
+
+  for (let i = 0; i < numPlayers; i++) {
+    for (let j = 0; j < colorTiles; j++) {
+      if (assigned >= totalTiles) break;
+      tiles[assigned].color = players[i].color;
+      assigned++;
     }
-  });
-
-  // Create grid matrix
-  for (let i = 0; i < size; i++) {
-    grid.push(flatTiles.slice(i * size, (i + 1) * size));
   }
+
+  tiles.sort(() => Math.random() - 0.5);
+
+  const grid: Tile[][] = [];
+  for (let r = 0; r < gridSize; r++) {
+    grid.push(tiles.slice(r * gridSize, (r + 1) * gridSize));
+  }
+
+  const randomPlayer = players[Math.floor(Math.random() * players.length)];
 
   return {
-    grid,
+    started: false,
+    currentPlayerId: randomPlayer.id,
     players,
-    currentPlayerId: players[0].id,
-    started: true,
-    revealedForAll: true,
-    winnerIds: [],
+    grid,
   };
-};
+}
 
-export const handleTileTap = (state: MemoryGameState, playerId: string, tileId: string): MemoryGameState => {
-  const newState = JSON.parse(JSON.stringify(state)) as MemoryGameState;
-  const { grid, players } = newState;
-  const tile = grid.flat().find(t => t.id === tileId);
-  if (!tile || tile.revealed) return newState;
+export function handleTileTap(state: MemoryGameState, playerId: string, tileId: string): MemoryGameState {
+  const newGrid = state.grid.map((row) =>
+    row.map((t) => (t.id === tileId ? { ...t, revealed: true } : t))
+  );
 
-  const player = players.find(p => p.id === playerId);
-  if (!player) return newState;
+  const tile = state.grid.flat().find((t) => t.id === tileId);
+  const player = state.players.find((p) => p.id === playerId);
 
-  if (tile.ownerId === playerId) {
-    tile.revealed = true;
-    player.revealedCount++;
-  } else {
-    tile.revealed = true;
-    setTimeout(() => (tile.revealed = false), 1000); // hide again later
+  if (tile && player && tile.color === player.color) {
+    player.revealedCount += 1;
   }
 
-  // Check stake
-  if (newState.stakedBy && playerId !== newState.stakedBy) {
-    const staker = players.find(p => p.id === newState.stakedBy);
-    if (tile.ownerId === playerId && staker) {
-      const hiddenTiles = grid.flat().filter(t => t.ownerId === staker.id && !t.revealed);
-      if (hiddenTiles.length > 0) {
-        const randomTile = hiddenTiles[Math.floor(Math.random() * hiddenTiles.length)];
-        randomTile.revealed = true;
-        staker.revealedCount++;
-      }
-    }
-    newState.stakedBy = undefined;
-  }
+  const nextIndex =
+    (state.players.findIndex((p) => p.id === playerId) + 1) % state.players.length;
 
-  // Check win
-  if (player.revealedCount === grid.flat().filter(t => t.ownerId === playerId).length) {
-    newState.winnerIds.push(playerId);
-  }
+  return {
+    ...state,
+    grid: newGrid,
+    currentPlayerId: state.players[nextIndex].id,
+    players: [...state.players],
+  };
+}
 
-  const nextIdx = (players.findIndex(p => p.id === playerId) + 1) % players.length;
-  newState.currentPlayerId = players[nextIdx].id;
-
-  return newState;
-};
-
-export const activatePaint = (state: MemoryGameState, playerId: string, tileId: string): MemoryGameState => {
-  const newState = JSON.parse(JSON.stringify(state)) as MemoryGameState;
-  const player = newState.players.find(p => p.id === playerId);
-  if (!player || !player.abilities.paint) return newState;
-
-  const tile = newState.grid.flat().find(t => t.id === tileId);
-  if (!tile || tile.ownerId) return newState;
-
-  // Convert blank tile to player color
-  tile.ownerId = player.id;
-  tile.color = player.color;
-
-  // Remove one of player's existing tiles
-  const owned = newState.grid.flat().filter(t => t.ownerId === player.id && !t.revealed);
-  if (owned.length > 0) {
-    const remove = owned[Math.floor(Math.random() * owned.length)];
-    remove.ownerId = undefined;
-    remove.color = undefined;
-  }
-
+export function activatePaint(state: MemoryGameState, playerId: string): MemoryGameState {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player?.abilities.paint) return state;
   player.abilities.paint = false;
-  return newState;
-};
+  return { ...state };
+}
 
-export const activateStake = (state: MemoryGameState, stakerId: string): MemoryGameState => {
-  const newState = JSON.parse(JSON.stringify(state)) as MemoryGameState;
-  const player = newState.players.find(p => p.id === stakerId);
-  if (!player || !player.abilities.stake) return newState;
+export function activateStake(state: MemoryGameState, playerId: string): MemoryGameState {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player?.abilities.stake) return state;
   player.abilities.stake = false;
-  newState.stakedBy = stakerId;
-  return newState;
-};
+  return { ...state };
+}
 
-export const activateViewPart = (state: MemoryGameState): MemoryGameState => {
-  const newState = JSON.parse(JSON.stringify(state)) as MemoryGameState;
-  const tiles = newState.grid.flat();
-  const toReveal = tiles.filter(t => !t.revealed);
-  const count = Math.min(6, Math.floor(Math.random() * 3) + 4);
-  for (let i = 0; i < count; i++) {
-    const idx = Math.floor(Math.random() * toReveal.length);
-    const tile = toReveal[idx];
-    if (!tile) continue;
-    tile.revealed = true;
-    setTimeout(() => (tile.revealed = false), 3000);
-  }
-  newState.players.forEach(p => (p.abilities.viewPart = false));
-  return newState;
-};
+export function activateViewPart(state: MemoryGameState): MemoryGameState {
+  const newGrid = state.grid.map((row) =>
+    row.map((t) =>
+      Math.random() < 0.15 ? { ...t, revealed: true } : t
+    )
+  );
+  return { ...state, grid: newGrid };
+}
+
