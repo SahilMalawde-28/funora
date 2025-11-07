@@ -2365,7 +2365,7 @@ export const getGridSize = (numPlayers: number): number => {
   return 9;
 };
 
-export const initMemoryGameState = (playerInfos: { id: string; name: string }[]): MemoryGameState => {
+export const initMemoryGame = (playerInfos: { id: string; name: string }[]): MemoryGameState => {
   const numPlayers = playerInfos.length;
   const size = getGridSize(numPlayers);
   const totalTiles = size * size;
