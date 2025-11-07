@@ -118,13 +118,123 @@ export default function MemoryGame({
 
   // --- ABILITIES ---
   const handleAbility = async (type: "paint" | "stake" | "view") => {
-    if (type === "view") {
-      setShowColors(true);
-      setTimeout(() => setShowColors(false), 3000);
-    }
-    // "paint" & "stake" would alter grid/points in actual gameplay
-    alert(`${type.toUpperCase()} activated! (Simulated for now)`);
+  if (!currentPlayer || !gameState) return;
+
+  const { grid, playerAbilities } = gameState;
+  let newGrid = [...grid.map(row => [...row])];
+
+  const randomCell = (filterFn: (cell: any) => boolean) => {
+    const valid = [];
+    newGrid.forEach((row, i) =>
+      row.forEach((cell, j) => filterFn(cell) && valid.push([i, j]))
+    );
+    if (valid.length === 0) return null;
+    return valid[Math.floor(Math.random() * valid.length)];
   };
+
+  switch (type) {
+    case "view": {
+      // Reveal ~25% random cells temporarily
+      const cellsToReveal = Math.floor((grid.length * grid[0].length) * 0.25);
+      const visibleGrid = newGrid.map(row =>
+        row.map(cell => ({ ...cell, visible: false }))
+      );
+
+      for (let i = 0; i < cellsToReveal; i++) {
+        const pos = randomCell(() => true);
+        if (!pos) continue;
+        const [r, c] = pos;
+        visibleGrid[r][c].visible = true;
+      }
+
+      await onUpdateState({ grid: visibleGrid });
+      setTimeout(() => {
+        const hiddenGrid = visibleGrid.map(row =>
+          row.map(cell => ({ ...cell, visible: false }))
+        );
+        onUpdateState({ grid: hiddenGrid });
+      }, 3000);
+
+      // consume ability
+      const newAbilities = {
+        ...playerAbilities,
+        [currentPlayer.id]: {
+          ...playerAbilities[currentPlayer.id],
+          view: Math.max(0, playerAbilities[currentPlayer.id].view - 1),
+        },
+      };
+      await onUpdateState({ playerAbilities: newAbilities });
+      break;
+    }
+
+    case "paint": {
+      const emptyCell = randomCell(cell => !cell.color);
+      const ownCell = randomCell(cell => cell.owner === currentPlayer.id);
+
+      if (!emptyCell || !ownCell) {
+        alert("No valid cells to paint!");
+        return;
+      }
+
+      const [r1, c1] = emptyCell;
+      const [r2, c2] = ownCell;
+
+      // Paint a colorless cell with player color
+      newGrid[r1][c1] = {
+        ...newGrid[r1][c1],
+        color: currentPlayer.color,
+        owner: currentPlayer.id,
+      };
+
+      // Make one of your color tiles colorless
+      newGrid[r2][c2] = { color: null, owner: null };
+
+      const newAbilities = {
+        ...playerAbilities,
+        [currentPlayer.id]: {
+          ...playerAbilities[currentPlayer.id],
+          paint: Math.max(0, playerAbilities[currentPlayer.id].paint - 1),
+        },
+      };
+
+      await onUpdateState({ grid: newGrid, playerAbilities: newAbilities });
+      break;
+    }
+
+    case "stake": {
+      const ownCell = randomCell(cell => cell.owner === currentPlayer.id);
+      if (!ownCell) {
+        alert("You don't have any tiles to stake!");
+        return;
+      }
+
+      const [r, c] = ownCell;
+      newGrid[r][c].visible = true;
+
+      await onUpdateState({ grid: newGrid });
+
+      // Hide again after few seconds (like 3s)
+      setTimeout(() => {
+        newGrid[r][c].visible = false;
+        onUpdateState({ grid: newGrid });
+      }, 3000);
+
+      const newAbilities = {
+        ...playerAbilities,
+        [currentPlayer.id]: {
+          ...playerAbilities[currentPlayer.id],
+          stake: Math.max(0, playerAbilities[currentPlayer.id].stake - 1),
+        },
+      };
+      await onUpdateState({ playerAbilities: newAbilities });
+      break;
+    }
+
+    default:
+      break;
+  }
+};
+
 
   // --- UI ---
   return (
