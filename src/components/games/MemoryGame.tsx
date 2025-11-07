@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../../lib/supabaseClient";
 import {
   initMemoryGameState,
   handleTileTap,
@@ -24,32 +24,36 @@ const MemoryGame: React.FC<MemoryGameProps> = ({
   gameState,
   onUpdateState,
 }) => {
-  const [localState, setLocalState] = useState<MemoryGameState | null>(gameState);
+  const [localState, setLocalState] = useState<MemoryGameState | null>(null);
   const [channel, setChannel] = useState<any>(null);
   const [showColors, setShowColors] = useState(false);
-  const [gameStarted, setGameStarted] = useState(false);
 
+  // --------------------- SETUP CHANNEL ---------------------
   useEffect(() => {
-    if (!channel) {
-      const ch = supabase.channel(`room-${room.id}`);
-      ch.on("broadcast", { event: "update" }, ({ payload }) => {
-        setLocalState(payload.state);
-      });
-      ch.subscribe();
-      setChannel(ch);
-    }
-  }, []);
+    const ch = supabase.channel(`room-${room.id}`);
+    ch.on("broadcast", { event: "update" }, ({ payload }) => {
+      setLocalState(payload.state);
+    });
+    ch.subscribe();
+    setChannel(ch);
 
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [room.id]);
+
+  // --------------------- INIT STATE ---------------------
   useEffect(() => {
-    if (!gameState?.started && players.length > 0) {
-      const newState = initMemoryGameState(players);
-      onUpdateState(newState);
-      setLocalState(newState);
+    if (!gameState?.grid && players.length > 0) {
+      const initState = initMemoryGameState(players);
+      setLocalState(initState);
+      if (room.host_id === currentPlayer.id) onUpdateState(initState);
     } else {
       setLocalState(gameState);
     }
   }, [gameState, players]);
 
+  // --------------------- HELPERS ---------------------
   const broadcast = (newState: any) => {
     if (channel)
       channel.send({
@@ -58,20 +62,22 @@ const MemoryGame: React.FC<MemoryGameProps> = ({
         payload: { state: newState },
       });
     onUpdateState(newState);
+    setLocalState(newState);
   };
 
   if (!localState) return null;
   const { grid, currentPlayerId, players: gamePlayers, started } = localState;
+
   const me = gamePlayers.find((p) => p.id === currentPlayer.id);
   const isMyTurn = currentPlayer.id === currentPlayerId;
   const isHost = room.host_id === currentPlayer.id;
 
+  // --------------------- START GAME ---------------------
   const startGame = () => {
     setShowColors(true);
     setTimeout(() => {
       setShowColors(false);
       const newState = { ...localState, started: true };
-      setGameStarted(true);
       broadcast(newState);
     }, 5000);
   };
@@ -90,6 +96,7 @@ const MemoryGame: React.FC<MemoryGameProps> = ({
     broadcast(newState);
   };
 
+  // --------------------- UI ---------------------
   return (
     <div className="flex flex-col items-center p-4 text-white bg-slate-900 min-h-screen">
       <h2 className="text-2xl font-bold mb-3">🧠 Memory Grid Challenge</h2>
@@ -128,19 +135,21 @@ const MemoryGame: React.FC<MemoryGameProps> = ({
               gridTemplateColumns: `repeat(${grid.length}, 45px)`,
             }}
           >
-            {grid.flat().map((tile) => (
-              <div
-                key={tile.id}
-                onClick={() => handleClick(tile.id)}
-                className="w-[45px] h-[45px] rounded cursor-pointer border border-slate-700"
-                style={{
-                  backgroundColor:
-                    showColors || tile.revealed
-                      ? tile.color || "#94a3b8"
-                      : "#1e293b",
-                }}
-              />
-            ))}
+            {grid.map((row, rowIndex) =>
+              row.map((tile) => (
+                <div
+                  key={tile.id + "-" + rowIndex}
+                  onClick={() => handleClick(tile.id)}
+                  className="w-[45px] h-[45px] rounded cursor-pointer border border-slate-700"
+                  style={{
+                    backgroundColor:
+                      showColors || tile.revealed
+                        ? tile.color || "#94a3b8"
+                        : "#1e293b",
+                  }}
+                />
+              ))
+            )}
           </div>
         </div>
 
