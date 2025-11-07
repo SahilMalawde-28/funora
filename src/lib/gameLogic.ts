@@ -2427,8 +2427,7 @@ export const initMemoryGameState = (playersInput: { id: string; name: string }[]
  const minPer = 8;
 const maxPer = 15;
 
-// total grid cells
-const totalCells = gridSize * gridSize;
+
 
 // pick one random per-player count for all players
 let perPlayer = randInt(minPer, maxPer);
