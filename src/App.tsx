@@ -11,7 +11,7 @@ import WavelengthGame from './components/games/WavelengthGame';
 import WordGuessGame from './components/games/WordGuessGame';
 import ChainGame from './components/games/ChainGame';
 import BoilingGame from './components/games/BoilingGame';
-import UnoGame from './components/games/UnoGame';
+import MemoryGame from './components/games/UnoGame';
 
 
 function App() {
