@@ -158,6 +158,9 @@ function App() {
       case 'memory':
         gameState = initMemoryGameState(playerIds);
         break;
+        case 'herd':
+        gameState = initHerdGame(playerIds);
+        break;
       default:
         return;
     }
@@ -248,6 +251,8 @@ function App() {
       return <BoilingGame {...gameProps} />;
     case 'memory':                      // ✅ NEW
       return <MemoryGame {...gameProps} />;
+    case 'herd':                      // ✅ NEW
+      return <HerdGame {...gameProps} />;
     default:
       return (
         <Lobby
