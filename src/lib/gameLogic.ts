@@ -2781,4 +2781,3 @@ export function herdEvaluateRound(state: HerdGameState): HerdGameState {
   };
 }
 
-}
