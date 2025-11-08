@@ -2642,177 +2642,84 @@ export const activateViewPart = (state: MemoryGameState, playerId?: string): Mem
 };
 
 // lib/gameLogic.ts
-// Herd game logic — safe, pure functions returning new state objects.
+// 🐄 Herd Mentality Game
 
 export type HerdPlayer = {
   id: string;
   name: string;
-  score: number;       // starts at 0, goes down to -6
-  answer?: string;     // last submitted answer (cleared on evaluate)
+  score: number;
+  answer?: string;
 };
 
 export type HerdGameState = {
-  roomId?: string;
-  phase: "waiting" | "answering" | "reveal" | "ended";
+  phase: "answering" | "reveal" | "ended";
   round: number;
   category: string;
-  players: HerdPlayer[];        // ordered list of players
-  computerActive?: boolean;
-  computerAnswer?: string | null;
+  players: HerdPlayer[];
   lastResult?: {
-    majorityAnswers?: string[]; // canonical majority answers (lowercased or original)
+    majorityAnswers?: string[];
     penalties?: { [id: string]: number };
   } | null;
 };
 
-const HERD_CATEGORIES: Record<string, string[]> = {
-  "Fast Food Chains": ["McDonalds","KFC","Subway","Burger King","Dominos","Taco Bell","Pizza Hut","Wendys","Five Guys","Starbucks","Shake Shack","In-N-Out","Chipotle","Panera","Dunkin"],
-  "Cartoon Characters": ["Mickey Mouse","SpongeBob","Tom","Jerry","Scooby-Doo","Donald Duck","Bugs Bunny","Popeye","Patrick","Shinchan","Doraemon","Pikachu","Charlie Brown","Garfield","Winnie the Pooh"],
-  "Fruits": ["Apple","Banana","Orange","Mango","Grapes","Pineapple","Watermelon","Cherry","Guava","Peach","Pear","Kiwi","Papaya","Lychee","Strawberry"],
-  "Animals": ["Dog","Cat","Lion","Tiger","Elephant","Giraffe","Monkey","Zebra","Rabbit","Horse","Fox","Bear","Deer","Kangaroo","Penguin"],
-  "Colors": ["Red","Blue","Green","Yellow","Purple","Pink","Orange","White","Black","Brown","Cyan","Magenta","Teal","Olive","Maroon"],
-  "Sports": ["Football","Cricket","Tennis","Hockey","Basketball","Baseball","Volleyball","Badminton","Rugby","Golf","Table Tennis","Boxing","Wrestling","Skating","Surfing"],
-  "Movie Genres": ["Action","Comedy","Drama","Horror","Sci-Fi","Romance","Thriller","Animation","Documentary","Fantasy","Mystery","Musical","Western","Noir","Biopic"],
-  "Car Brands": ["Tesla","BMW","Mercedes","Audi","Toyota","Honda","Ford","Hyundai","Nissan","Ferrari","Lamborghini","Kia","Volvo","Jaguar","Porsche"],
-  "School Subjects": ["Maths","Science","English","History","Geography","Physics","Chemistry","Biology","Computer","Economics","Philosophy","Art","Music","PE","Sociology"],
-  "Ice Cream Flavours": ["Chocolate","Vanilla","Strawberry","Mango","Butterscotch","Mint","Coffee","Cookies","Pistachio","Caramel","Rum Raisin","Neapolitan","Lemon","Blueberry","Coconut"],
-  // Add more to reach 50+ categories if you want; these are examples.
-};
+const HERD_CATEGORIES = [
+  "Fruits", "Animals", "Colors", "Countries", "Sports", "Car Brands", "Fast Food", "Subjects", "Cities", "Cartoon Characters"
+];
 
-function getRandomCategory(): string {
-  const keys = Object.keys(HERD_CATEGORIES);
-  return keys[Math.floor(Math.random() * keys.length)];
-}
-function getRandomFromCategory(category: string): string {
-  const list = HERD_CATEGORIES[category] || [];
-  if (!list.length) return "";
-  return list[Math.floor(Math.random() * list.length)];
-}
-
-/**
- * Initialize HerdGameState
- * playersInput: array of {id, name}
- */
-export function initHerdGame(playersInput: { id: string; name: string }[], roomId?: string): HerdGameState {
+export function initHerdGame(playersInput: { id: string; name: string }[]): HerdGameState {
   const players = playersInput.map(p => ({ id: p.id, name: p.name, score: 0 }));
   return {
-    roomId,
     phase: "answering",
     round: 1,
-    category: getRandomCategory(),
+    category: HERD_CATEGORIES[Math.floor(Math.random() * HERD_CATEGORIES.length)],
     players,
-    computerActive: false,
-    computerAnswer: null,
-    lastResult: null,
+    lastResult: null
   };
 }
 
-/** Submit answer — returns new state with that player's answer set (no other side-effects) */
 export function herdSubmitAnswer(state: HerdGameState, playerId: string, answer: string): HerdGameState {
-  const nextPlayers = state.players.map(p => p.id === playerId ? { ...p, answer: (answer || "").trim() } : { ...p });
-  return { ...state, players: nextPlayers };
+  const players = state.players.map(p => p.id === playerId ? { ...p, answer: answer.trim() } : p);
+  return { ...state, players };
 }
 
-/**
- * Evaluate round — returns new state after penalties, next round/category etc.
- * Rules implemented:
- * - If active players > 2: majority answers survive, minority -1
- * - If active players <= 2 and computer not active: activate computer (choose answer), return (no evaluation yet)
- * - If active players <= 2 and computer active: compare players to computerAnswer; mismatch => -1
- * - Clear players' answers after evaluation
- * - If someone reaches score <= -6, phase becomes 'ended'
- */
 export function herdEvaluateRound(state: HerdGameState): HerdGameState {
   const active = state.players.filter(p => p.score > -6);
-  const nextPlayers = state.players.map(p => ({ ...p })); // deep-ish copy of players
-  const penalties: { [id: string]: number } = {};
-  let lastResult: HerdGameState["lastResult"] = null;
-  let nextPhase: HerdGameState["phase"] = "answering";
-  let nextComputerActive = !!state.computerActive;
-  let nextComputerAnswer = state.computerAnswer ?? null;
+  if (active.length <= 1) return { ...state, phase: "ended" };
 
-  // if <=1 active -> end
-  if (active.length <= 1) {
-    return { ...state, phase: "ended" };
-  }
-
-  // if 2 or fewer and computer not active -> activate computer (choose an answer) and return (players get another chance to submit)
-  if (active.length <= 2 && !state.computerActive) {
-    nextComputerActive = true;
-    nextComputerAnswer = getRandomFromCategory(state.category);
-    // don't evaluate now; let players see computer and then evaluate on host action or when all submit
-    return { ...state, computerActive: nextComputerActive, computerAnswer: nextComputerAnswer, phase: "answering" };
-  }
-
-  // Build groups (lowercase) for majority logic
-  const groups: Record<string, string[]> = {};
+  // Group by answers
+  const counts: Record<string, string[]> = {};
   for (const p of active) {
     const a = (p.answer ?? "").trim().toLowerCase() || "__blank__";
-    if (!groups[a]) groups[a] = [];
-    groups[a].push(p.id);
+    if (!counts[a]) counts[a] = [];
+    counts[a].push(p.id);
   }
 
-  if (active.length > 2) {
-    // find largest group size
-    let max = 0;
-    Object.keys(groups).forEach(k => { if (groups[k].length > max) max = groups[k].length; });
+  let max = 0;
+  for (const k in counts) max = Math.max(max, counts[k].length);
+  const majority = Object.keys(counts).filter(k => counts[k].length === max && k !== "__blank__");
+  const penalties: Record<string, number> = {};
 
-    // majority answers (exclude blanks)
-    const majority = Object.keys(groups).filter(k => k !== "__blank__" && groups[k].length === max);
-
-    // apply penalties: players not in majority get -1 (including blanks)
-    for (const p of nextPlayers) {
-      if (p.score <= -6) continue;
-      const ans = (p.answer ?? "").trim().toLowerCase() || "__blank__";
-      if (majority.length === 0) {
-        // no real majority => treat blanks as minority: penalize blanks
-        if (ans === "__blank__") {
-          p.score -= 1;
-          penalties[p.id] = (penalties[p.id] || 0) - 1;
-        } else {
-          // no majority but non-blank answers exist — treat all as minority? chosen behavior: no penalty
-        }
-      } else {
-        if (!majority.includes(ans)) {
-          p.score -= 1;
-          penalties[p.id] = (penalties[p.id] || 0) - 1;
-        }
-      }
-      p.answer = undefined;
+  const newPlayers = state.players.map(p => {
+    if (p.score <= -6) return p;
+    const ans = (p.answer ?? "").trim().toLowerCase() || "__blank__";
+    if (!majority.includes(ans)) {
+      const newScore = p.score - 1;
+      penalties[p.id] = -1;
+      return { ...p, score: newScore, answer: undefined };
     }
-    lastResult = { majorityAnswers: majority.map(s => s === "__blank__" ? "" : s), penalties };
-  } else {
-    // 2-player mode vs computer (computerActive should be true)
-    const comp = (state.computerAnswer ?? "").trim().toLowerCase() || "__blank__";
-    for (const p of nextPlayers) {
-      if (p.score <= -6) continue;
-      const ans = (p.answer ?? "").trim().toLowerCase() || "__blank__";
-      if (ans !== comp) {
-        p.score -= 1;
-        penalties[p.id] = (penalties[p.id] || 0) - 1;
-      }
-      p.answer = undefined;
-    }
-    lastResult = { majorityAnswers: [state.computerAnswer ?? ""], penalties };
-  }
+    return { ...p, answer: undefined };
+  });
 
-  // check end condition
-  const someoneDead = nextPlayers.some(p => p.score <= -6);
-  if (someoneDead) {
-    nextPhase = "ended";
-  } else {
-    nextPhase = "answering";
-  }
+  const ended = newPlayers.some(p => p.score <= -6);
 
   return {
     ...state,
-    players: nextPlayers,
-    phase: nextPhase,
-    category: getRandomCategory(),
+    players: newPlayers,
     round: state.round + 1,
-    computerActive: someoneDead ? false : nextComputerActive,
-    computerAnswer: someoneDead ? null : nextComputerAnswer,
-    lastResult,
+    category: HERD_CATEGORIES[Math.floor(Math.random() * HERD_CATEGORIES.length)],
+    phase: ended ? "ended" : "reveal",
+    lastResult: { majorityAnswers: majority.map(a => (a === "__blank__" ? "" : a)), penalties }
   };
 }
+
 
