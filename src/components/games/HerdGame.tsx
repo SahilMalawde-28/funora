@@ -1,287 +1,192 @@
 import { useEffect, useState } from "react";
+import supabase from "../../lib/supabaseClient";
 import { Room, Player } from "../../lib/supabase";
-import { HerdGameState } from "../../lib/gameLogic";
-import { Trophy } from "lucide-react";
 
 interface HerdGameProps {
   room: Room;
   players: Player[];
   currentPlayer: Player;
-  gameState: HerdGameState;
-  onUpdateState: (newState: Partial<HerdGameState>) => void;
-  onEndGame: () => void;
+  onUpdateRoom: (newData: Partial<Room>) => void;
 }
+
+const TOPICS = {
+  animals: ["cow", "dog", "cat", "lion", "horse", "tiger", "elephant"],
+  fruits: ["apple", "banana", "mango", "orange", "grape", "pear"],
+  colors: ["red", "blue", "green", "yellow", "black", "white"],
+};
 
 export default function HerdGame({
   room,
   players,
   currentPlayer,
-  gameState,
-  onUpdateState,
-  onEndGame,
+  onUpdateRoom,
 }: HerdGameProps) {
-  const [answer, setAnswer] = useState("");
-  const [timer, setTimer] = useState(25);
-  const [revealed, setRevealed] = useState(false);
+  const gameState = room.game_state?.herd || {
+    round: 1,
+    scores: {},
+    answers: {},
+    eliminated: [],
+    topic: null,
+  };
 
-  const hasAnswered = !!gameState.answers[currentPlayer.player_id];
-  const allAnswered = Object.keys(gameState.answers).length === players.length;
+  const [input, setInput] = useState("");
+  const [status, setStatus] = useState("");
 
-  // Timer logic
+  // Ensure each player has score entry
   useEffect(() => {
-    if (gameState.phase === "answering" && timer > 0) {
-      const t = setTimeout(() => setTimer((t) => t - 1), 1000);
-      return () => clearTimeout(t);
+    const newScores = { ...gameState.scores };
+    players.forEach((p) => {
+      if (newScores[p.id] === undefined) newScores[p.id] = 0;
+    });
+    if (JSON.stringify(newScores) !== JSON.stringify(gameState.scores)) {
+      updateGame({ scores: newScores });
     }
-    if (timer === 0 && !hasAnswered) handleSubmit();
-  }, [timer, gameState.phase]);
+  }, [players]);
+
+  // Pick random topic for first round
+  useEffect(() => {
+    if (!gameState.topic) {
+      const randomTopic = Object.keys(TOPICS)[
+        Math.floor(Math.random() * Object.keys(TOPICS).length)
+      ];
+      updateGame({ topic: randomTopic });
+    }
+  }, []);
+
+  const updateGame = (newData: any) => {
+    const newState = {
+      ...room.game_state,
+      herd: { ...gameState, ...newData },
+    };
+    onUpdateRoom({ game_state: newState });
+    supabase.from("rooms").update({ game_state: newState }).eq("id", room.id);
+  };
 
   const handleSubmit = () => {
-    if (!answer.trim() || hasAnswered) return;
-    const newAnswers = { ...gameState.answers, [currentPlayer.player_id]: answer.trim().toLowerCase() };
-    onUpdateState({ answers: newAnswers });
+    if (!input.trim()) return;
+    const newAnswers = {
+      ...gameState.answers,
+      [currentPlayer.id]: input.trim().toLowerCase(),
+    };
+    updateGame({ answers: newAnswers });
+    setInput("");
+    setStatus("🐮 Waiting for others...");
   };
 
-  const handleHostContinue = () => {
-    if (gameState.phase === "answering" && allAnswered) {
-      calculateResults();
-    } else if (gameState.phase === "results") {
-      nextRound();
+  // Evaluate once all alive players answered
+  useEffect(() => {
+    const alivePlayers = players.filter(
+      (p) => !gameState.eliminated.includes(p.id)
+    );
+    const allAnswered = alivePlayers.every((p) => gameState.answers[p.id]);
+    if (allAnswered && alivePlayers.length >= 2) {
+      evaluateRound();
     }
-  };
+  }, [gameState.answers]);
 
-  const calculateResults = () => {
-    const answerGroups: Record<string, string[]> = {};
-    for (const [pid, ans] of Object.entries(gameState.answers)) {
-      if (!answerGroups[ans]) answerGroups[ans] = [];
-      answerGroups[ans].push(pid);
-    }
+  const evaluateRound = () => {
+    const answers = Object.values(gameState.answers);
+    const counts: Record<string, number> = {};
+    answers.forEach((a) => (counts[a] = (counts[a] || 0) + 1));
 
-    const majorityCount = Math.max(...Object.values(answerGroups).map((a) => a.length));
-    const majorityAnswers = Object.keys(answerGroups).filter((a) => answerGroups[a].length === majorityCount);
-
+    const alivePlayers = players.filter(
+      (p) => !gameState.eliminated.includes(p.id)
+    );
     const newScores = { ...gameState.scores };
-    for (const player of players) {
-      const ans = gameState.answers[player.player_id];
-      if (!majorityAnswers.includes(ans)) {
-        newScores[player.player_id] = (newScores[player.player_id] || 0) - 1;
+    const eliminated = [...gameState.eliminated];
+
+    // Computer logic when only 2 players remain
+    let computerWord: string | null = null;
+    if (alivePlayers.length === 2) {
+      const topic = gameState.topic || "animals";
+      const topicWords = TOPICS[topic];
+      computerWord = topicWords[Math.floor(Math.random() * topicWords.length)];
+    }
+
+    alivePlayers.forEach((p) => {
+      const answer = gameState.answers[p.id];
+      const isMinority = counts[answer] === 1;
+
+      // special 2-player rule
+      if (alivePlayers.length === 2 && computerWord) {
+        const other = alivePlayers.find((x) => x.id !== p.id)!;
+        const otherAns = gameState.answers[other.id];
+        if (answer === computerWord) return; // safe
+        if (otherAns === answer) return; // both safe if same non-computer word
+        newScores[p.id] -= 1;
+      } else {
+        if (isMinority) newScores[p.id] -= 1;
       }
-    }
 
-    onUpdateState({
-      phase: "results",
-      scores: newScores,
+      if (newScores[p.id] <= -6 && !eliminated.includes(p.id)) {
+        eliminated.push(p.id);
+      }
     });
-    setRevealed(true);
-  };
 
-  const nextRound = () => {
-    const eliminated = players.filter((p) => (gameState.scores[p.player_id] || 0) <= -6);
-    const activePlayers = players.filter((p) => !eliminated.includes(p));
+    const nextRound = gameState.round + 1;
+    const newTopic =
+      Object.keys(TOPICS)[Math.floor(Math.random() * Object.keys(TOPICS).length)];
 
-    // If only 2 players left → computer joins
-    if (activePlayers.length === 2) {
-      const newCategory = getRandomCategory();
-      const word = getComputerWordForCategory(newCategory);
-      onUpdateState({
-        phase: "computer_round",
-        question: newCategory,
-        computerWord: word,
-        answers: {},
-      });
-      setTimer(25);
-      setAnswer("");
-      setRevealed(false);
-      return;
-    }
-
-    const newCategory = getRandomCategory();
-    onUpdateState({
-      phase: "answering",
-      question: newCategory,
+    updateGame({
+      round: nextRound,
+      scores: newScores,
       answers: {},
+      eliminated,
+      topic: newTopic,
     });
-    setTimer(25);
-    setAnswer("");
-    setRevealed(false);
+
+    setStatus(`🐮 Round ${nextRound} starting!`);
   };
 
-  const getRandomCategory = () => {
-    const categories = Object.keys(categoryWords);
-    return categories[Math.floor(Math.random() * categories.length)];
-  };
+  return (
+    <div className="flex flex-col items-center justify-center h-full text-center">
+      <h2 className="text-2xl font-bold mb-2">🐮 Herd Mentality</h2>
+      <p className="mb-4 text-gray-600">
+        Round {gameState.round} — Topic:{" "}
+        <span className="font-semibold capitalize">{gameState.topic}</span>
+      </p>
 
-  const getComputerWordForCategory = (category: string) => {
-    const words = categoryWords[category];
-    return words[Math.floor(Math.random() * words.length)];
-  };
-
-  const handleComputerRound = () => {
-    const compWord = gameState.computerWord!;
-    const [p1, p2] = players;
-    const newScores = { ...gameState.scores };
-
-    const p1ans = gameState.answers[p1.player_id];
-    const p2ans = gameState.answers[p2.player_id];
-
-    if (p1ans === compWord && p2ans === compWord) {
-      // both matched → safe
-    } else if (p1ans === compWord) {
-      newScores[p2.player_id] = (newScores[p2.player_id] || 0) - 1;
-    } else if (p2ans === compWord) {
-      newScores[p1.player_id] = (newScores[p1.player_id] || 0) - 1;
-    } else if (p1ans !== p2ans) {
-      // both differ from comp and each other → both lose
-      newScores[p1.player_id] = (newScores[p1.player_id] || 0) - 1;
-      newScores[p2.player_id] = (newScores[p2.player_id] || 0) - 1;
-    } else {
-      // both same but diff from comp → safe
-    }
-
-    onUpdateState({
-      scores: newScores,
-      phase: "results",
-    });
-  };
-
-  // 🗂 Category word bank for computer logic
-  const categoryWords: Record<string, string[]> = {
-    Fruits: ["apple", "banana", "mango", "grape", "kiwi", "orange"],
-    Movies: ["inception", "avatar", "titanic", "joker", "batman"],
-    Sports: ["football", "cricket", "hockey", "tennis", "golf"],
-    Animals: ["lion", "tiger", "dog", "cat", "elephant"],
-    Countries: ["india", "japan", "brazil", "france", "canada"],
-    Colors: ["red", "blue", "green", "yellow", "purple"],
-    TVShows: ["friends", "breaking bad", "got", "sherlock"],
-    Professions: ["doctor", "teacher", "engineer", "pilot"],
-  };
-
-  // 🧩 PHASE 1: Answering
-  if (gameState.phase === "answering") {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-pink-100 p-6">
-        <div className="max-w-3xl mx-auto bg-white p-8 rounded-3xl shadow-xl space-y-6 text-center">
-          <div className="text-6xl mb-2">🐮</div>
-          <h1 className="text-3xl font-black text-gray-800 mb-2">HERD MENTALITY</h1>
-          <p className="text-gray-600">Try to think like the herd!</p>
-
-          <div className="p-6 bg-pink-50 border-2 border-pink-300 rounded-2xl">
-            <p className="font-bold text-pink-700 mb-1">CATEGORY</p>
-            <p className="text-2xl font-semibold">{gameState.question}</p>
-          </div>
-
-          <input
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            placeholder="Type your answer..."
-            className="w-full p-4 border-2 border-gray-300 rounded-xl text-lg focus:border-pink-500"
-            disabled={hasAnswered}
-          />
-          <button
-            onClick={handleSubmit}
-            disabled={!answer.trim() || hasAnswered}
-            className="w-full bg-pink-500 text-white py-3 rounded-xl font-bold text-lg shadow hover:scale-105 transition-all disabled:opacity-60"
-          >
-            {hasAnswered ? "✅ Submitted" : "Submit"}
-          </button>
-
-          <p className="text-sm text-gray-500">{Object.keys(gameState.answers).length}/{players.length} answered</p>
-
-          {currentPlayer.player_id === room.host_id && allAnswered && (
-            <button
-              onClick={handleHostContinue}
-              className="w-full bg-green-500 text-white py-3 rounded-xl font-bold text-lg shadow hover:scale-105 transition-all"
-            >
-              Continue ➜ Reveal
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // 🧩 PHASE 2: Computer Round
-  if (gameState.phase === "computer_round") {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-100 p-6 text-center">
-        <div className="max-w-3xl mx-auto bg-white p-8 rounded-3xl shadow-xl">
-          <h1 className="text-3xl font-black text-gray-800 mb-2">🤖 Computer Round</h1>
-          <p className="text-gray-600 mb-4">Try to match the computer’s secret word!</p>
-
-          <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl mb-4">
-            <p className="text-sm text-indigo-700 font-bold">Category</p>
-            <p className="text-2xl font-bold text-gray-900">{gameState.question}</p>
-          </div>
-
-          <input
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            placeholder="Type your answer..."
-            className="w-full p-4 border-2 border-gray-300 rounded-xl text-lg focus:border-indigo-500"
-            disabled={hasAnswered}
-          />
-          <button
-            onClick={handleSubmit}
-            disabled={!answer.trim() || hasAnswered}
-            className="w-full bg-indigo-500 text-white py-3 rounded-xl font-bold text-lg shadow hover:scale-105 transition-all disabled:opacity-60"
-          >
-            {hasAnswered ? "✅ Submitted" : "Submit"}
-          </button>
-
-          {currentPlayer.player_id === room.host_id && allAnswered && (
-            <button
-              onClick={handleComputerRound}
-              className="w-full mt-4 bg-green-500 text-white py-3 rounded-xl font-bold text-lg shadow hover:scale-105 transition-all"
-            >
-              Continue ➜ Reveal
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // 🧩 PHASE 3: Results
-  if (gameState.phase === "results") {
-    const eliminated = players.filter((p) => (gameState.scores[p.player_id] || 0) <= -6);
-    const winner = players.find((p) => !eliminated.includes(p));
-
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-pink-100 p-6 text-center">
-        <div className="max-w-3xl mx-auto bg-white p-8 rounded-3xl shadow-xl space-y-4">
-          <Trophy className="w-12 h-12 text-pink-500 mx-auto mb-2" />
-          <h1 className="text-3xl font-black text-gray-800">Round Results</h1>
-
-          {revealed && (
-            <div className="mt-3 space-y-2">
-              {players.map((p) => (
-                <p key={p.player_id} className="text-gray-700">
-                  {p.name}: {gameState.scores[p.player_id] || 0}
-                </p>
-              ))}
+      {!gameState.eliminated.includes(currentPlayer.id) ? (
+        <>
+          {!gameState.answers[currentPlayer.id] ? (
+            <div className="flex flex-col items-center space-y-3">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                className="border border-gray-400 rounded px-3 py-2 text-center w-48"
+                placeholder={`Your ${gameState.topic}...`}
+              />
+              <button
+                onClick={handleSubmit}
+                className="bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600"
+              >
+                Submit
+              </button>
             </div>
-          )}
-
-          {winner ? (
-            <p className="text-xl font-bold text-green-600 mt-3">
-              🎉 {winner.name} wins the herd!
-            </p>
           ) : (
-            <p className="text-gray-600 mt-2">No one’s out yet — next round!</p>
+            <p className="text-gray-700">{status}</p>
           )}
+        </>
+      ) : (
+        <p className="text-red-500 font-semibold">You’re out! 💀</p>
+      )}
 
-          {currentPlayer.player_id === room.host_id && (
-            <button
-              onClick={winner ? onEndGame : handleHostContinue}
-              className="mt-6 w-full bg-pink-500 text-white py-3 rounded-xl font-bold text-lg shadow hover:scale-105 transition-all"
-            >
-              {winner ? "🏁 End Game" : "Next Round ➜"}
-            </button>
-          )}
-        </div>
+      <div className="mt-6">
+        <h3 className="font-semibold mb-2">Scores:</h3>
+        {players.map((p) => (
+          <div
+            key={p.id}
+            className={`${
+              gameState.eliminated.includes(p.id)
+                ? "text-gray-400 line-through"
+                : "text-black"
+            }`}
+          >
+            {p.name}: {gameState.scores[p.id] ?? 0}
+          </div>
+        ))}
       </div>
-    );
-  }
-
-  return <p className="text-center text-gray-600 mt-10">Loading Herd Mentality...</p>;
+    </div>
+  );
 }
