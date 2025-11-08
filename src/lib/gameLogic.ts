@@ -58,9 +58,9 @@ export const GAMES = [
     minPlayers: 2
   },
   {
-    id: 'memory',
-    name: 'Grid GOAT',
-    description: 'Remember,manipulate and conquer',
+    id: 'herd',
+    name: 'Herd Mentality',
+    description: 'Go with the crowd or you will end up lost.',
     emoji: '🃏',
     minPlayers: 2
   }
