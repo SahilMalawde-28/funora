@@ -56,6 +56,13 @@ export const GAMES = [
     description: 'Remember,manipulate and conquer',
     emoji: '🃏',
     minPlayers: 2
+  },
+  {
+    id: 'memory',
+    name: 'Grid GOAT',
+    description: 'Remember,manipulate and conquer',
+    emoji: '🃏',
+    minPlayers: 2
   }
 ];
 
