@@ -2641,15 +2641,14 @@ export const activateViewPart = (state: MemoryGameState, playerId?: string): Mem
   return next;
 };
 
-// lib/gameLogic (append these exports)
-
-// lib/gameLogic.ts (add to your other games)
+// lib/gameLogic.ts
+// Herd game logic — safe, pure functions returning new state objects.
 
 export type HerdPlayer = {
   id: string;
   name: string;
-  score: number;
-  answer?: string;
+  score: number;       // starts at 0, goes down to -6
+  answer?: string;     // last submitted answer (cleared on evaluate)
 };
 
 export type HerdGameState = {
@@ -2657,11 +2656,11 @@ export type HerdGameState = {
   phase: "waiting" | "answering" | "reveal" | "ended";
   round: number;
   category: string;
-  players: HerdPlayer[];
+  players: HerdPlayer[];        // ordered list of players
   computerActive?: boolean;
   computerAnswer?: string | null;
   lastResult?: {
-    majorityAnswers?: string[];
+    majorityAnswers?: string[]; // canonical majority answers (lowercased or original)
     penalties?: { [id: string]: number };
   } | null;
 };
@@ -2677,19 +2676,23 @@ const HERD_CATEGORIES: Record<string, string[]> = {
   "Car Brands": ["Tesla","BMW","Mercedes","Audi","Toyota","Honda","Ford","Hyundai","Nissan","Ferrari","Lamborghini","Kia","Volvo","Jaguar","Porsche"],
   "School Subjects": ["Maths","Science","English","History","Geography","Physics","Chemistry","Biology","Computer","Economics","Philosophy","Art","Music","PE","Sociology"],
   "Ice Cream Flavours": ["Chocolate","Vanilla","Strawberry","Mango","Butterscotch","Mint","Coffee","Cookies","Pistachio","Caramel","Rum Raisin","Neapolitan","Lemon","Blueberry","Coconut"],
+  // Add more to reach 50+ categories if you want; these are examples.
 };
 
 function getRandomCategory(): string {
   const keys = Object.keys(HERD_CATEGORIES);
   return keys[Math.floor(Math.random() * keys.length)];
 }
-
 function getRandomFromCategory(category: string): string {
   const list = HERD_CATEGORIES[category] || [];
+  if (!list.length) return "";
   return list[Math.floor(Math.random() * list.length)];
 }
 
-// ---------- INIT ----------
+/**
+ * Initialize HerdGameState
+ * playersInput: array of {id, name}
+ */
 export function initHerdGame(playersInput: { id: string; name: string }[], roomId?: string): HerdGameState {
   const players = playersInput.map(p => ({ id: p.id, name: p.name, score: 0 }));
   return {
@@ -2704,79 +2707,111 @@ export function initHerdGame(playersInput: { id: string; name: string }[], roomI
   };
 }
 
-// ---------- SUBMIT ----------
+/** Submit answer — returns new state with that player's answer set (no other side-effects) */
 export function herdSubmitAnswer(state: HerdGameState, playerId: string, answer: string): HerdGameState {
-  return {
-    ...state,
-    players: state.players.map(p => p.id === playerId ? { ...p, answer: (answer || "").trim() } : p),
-  };
+  const nextPlayers = state.players.map(p => p.id === playerId ? { ...p, answer: (answer || "").trim() } : { ...p });
+  return { ...state, players: nextPlayers };
 }
 
-// ---------- EVALUATE ----------
+/**
+ * Evaluate round — returns new state after penalties, next round/category etc.
+ * Rules implemented:
+ * - If active players > 2: majority answers survive, minority -1
+ * - If active players <= 2 and computer not active: activate computer (choose answer), return (no evaluation yet)
+ * - If active players <= 2 and computer active: compare players to computerAnswer; mismatch => -1
+ * - Clear players' answers after evaluation
+ * - If someone reaches score <= -6, phase becomes 'ended'
+ */
 export function herdEvaluateRound(state: HerdGameState): HerdGameState {
-  const activePlayers = state.players.filter(p => p.score > -6);
-  const nextPlayers = state.players.map(p => ({ ...p }));
+  const active = state.players.filter(p => p.score > -6);
+  const nextPlayers = state.players.map(p => ({ ...p })); // deep-ish copy of players
   const penalties: { [id: string]: number } = {};
   let lastResult: HerdGameState["lastResult"] = null;
-  let nextPhase: HerdGameState["phase"] = "reveal";
-  let nextComputerActive = state.computerActive;
-  let nextComputerAnswer = state.computerAnswer;
+  let nextPhase: HerdGameState["phase"] = "answering";
+  let nextComputerActive = !!state.computerActive;
+  let nextComputerAnswer = state.computerAnswer ?? null;
 
-  if (activePlayers.length <= 1) {
+  // if <=1 active -> end
+  if (active.length <= 1) {
     return { ...state, phase: "ended" };
   }
 
-  if (activePlayers.length <= 2 && !state.computerActive) {
+  // if 2 or fewer and computer not active -> activate computer (choose an answer) and return (players get another chance to submit)
+  if (active.length <= 2 && !state.computerActive) {
     nextComputerActive = true;
     nextComputerAnswer = getRandomFromCategory(state.category);
-    return { ...state, computerActive: nextComputerActive, computerAnswer: nextComputerAnswer };
+    // don't evaluate now; let players see computer and then evaluate on host action or when all submit
+    return { ...state, computerActive: nextComputerActive, computerAnswer: nextComputerAnswer, phase: "answering" };
   }
 
-  if (activePlayers.length > 2) {
-    // normal mode
-    const groups: Record<string, string[]> = {};
-    for (const p of activePlayers) {
-      const ans = (p.answer ?? "").trim().toLowerCase() || "__blank__";
-      if (!groups[ans]) groups[ans] = [];
-      groups[ans].push(p.id);
-    }
-    const max = Math.max(...Object.values(groups).map(g => g.length));
-    const majority = Object.keys(groups).filter(k => groups[k].length === max && k !== "__blank__");
+  // Build groups (lowercase) for majority logic
+  const groups: Record<string, string[]> = {};
+  for (const p of active) {
+    const a = (p.answer ?? "").trim().toLowerCase() || "__blank__";
+    if (!groups[a]) groups[a] = [];
+    groups[a].push(p.id);
+  }
+
+  if (active.length > 2) {
+    // find largest group size
+    let max = 0;
+    Object.keys(groups).forEach(k => { if (groups[k].length > max) max = groups[k].length; });
+
+    // majority answers (exclude blanks)
+    const majority = Object.keys(groups).filter(k => k !== "__blank__" && groups[k].length === max);
+
+    // apply penalties: players not in majority get -1 (including blanks)
     for (const p of nextPlayers) {
       if (p.score <= -6) continue;
       const ans = (p.answer ?? "").trim().toLowerCase() || "__blank__";
-      if (!majority.includes(ans)) {
-        p.score -= 1;
-        penalties[p.id] = -1;
+      if (majority.length === 0) {
+        // no real majority => treat blanks as minority: penalize blanks
+        if (ans === "__blank__") {
+          p.score -= 1;
+          penalties[p.id] = (penalties[p.id] || 0) - 1;
+        } else {
+          // no majority but non-blank answers exist — treat all as minority? chosen behavior: no penalty
+        }
+      } else {
+        if (!majority.includes(ans)) {
+          p.score -= 1;
+          penalties[p.id] = (penalties[p.id] || 0) - 1;
+        }
       }
       p.answer = undefined;
     }
-    lastResult = { majorityAnswers: majority, penalties };
+    lastResult = { majorityAnswers: majority.map(s => s === "__blank__" ? "" : s), penalties };
   } else {
-    // 2-player mode vs computer
+    // 2-player mode vs computer (computerActive should be true)
+    const comp = (state.computerAnswer ?? "").trim().toLowerCase() || "__blank__";
     for (const p of nextPlayers) {
       if (p.score <= -6) continue;
-      const ans = (p.answer ?? "").trim().toLowerCase();
-      const comp = (state.computerAnswer ?? "").trim().toLowerCase();
+      const ans = (p.answer ?? "").trim().toLowerCase() || "__blank__";
       if (ans !== comp) {
         p.score -= 1;
-        penalties[p.id] = -1;
+        penalties[p.id] = (penalties[p.id] || 0) - 1;
       }
       p.answer = undefined;
     }
     lastResult = { majorityAnswers: [state.computerAnswer ?? ""], penalties };
   }
 
-  const someoneLost = nextPlayers.some(p => p.score <= -6);
+  // check end condition
+  const someoneDead = nextPlayers.some(p => p.score <= -6);
+  if (someoneDead) {
+    nextPhase = "ended";
+  } else {
+    nextPhase = "answering";
+  }
 
   return {
     ...state,
     players: nextPlayers,
-    phase: someoneLost ? "ended" : "answering",
+    phase: nextPhase,
     category: getRandomCategory(),
     round: state.round + 1,
-    computerActive: someoneLost ? false : nextComputerActive,
-    computerAnswer: someoneLost ? null : nextComputerAnswer,
+    computerActive: someoneDead ? false : nextComputerActive,
+    computerAnswer: someoneDead ? null : nextComputerAnswer,
     lastResult,
   };
 }
