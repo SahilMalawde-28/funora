@@ -61,7 +61,7 @@ export const GAMES = [
     id: 'herd',
     name: 'Herd Mentality',
     description: 'Go with the crowd or you will end up lost.',
-    emoji: '🃏',
+    emoji: '🐮',
     minPlayers: 2
   }
 ];
