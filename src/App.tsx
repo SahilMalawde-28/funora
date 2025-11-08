@@ -12,6 +12,7 @@ import WordGuessGame from './components/games/WordGuessGame';
 import ChainGame from './components/games/ChainGame';
 import BoilingGame from './components/games/BoilingGame';
 import MemoryGame from './components/games/MemoryGame';
+import HerdGame from './components/games/HerdGame';
 
 
 function App() {
