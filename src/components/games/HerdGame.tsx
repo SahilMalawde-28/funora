@@ -1,192 +1,205 @@
-import { useEffect, useState } from "react";
-import {supabase} from "../../lib/supabase";
+import { useState, useEffect } from "react";
 import { Room, Player } from "../../lib/supabase";
 
 interface HerdGameProps {
   room: Room;
   players: Player[];
   currentPlayer: Player;
-  onUpdateRoom: (newData: Partial<Room>) => void;
+  gameState: any;
+  onUpdateState: (newState: any) => void;
+  onEndGame: () => void;
 }
 
-const TOPICS = {
-  animals: ["cow", "dog", "cat", "lion", "horse", "tiger", "elephant"],
-  fruits: ["apple", "banana", "mango", "orange", "grape", "pear"],
-  colors: ["red", "blue", "green", "yellow", "black", "white"],
+const TOPICS: Record<string, string[]> = {
+  animals: ["cow", "dog", "cat", "lion", "horse", "tiger", "elephant", "goat", "monkey"],
+  fruits: ["apple", "banana", "mango", "orange", "grape", "pear", "kiwi", "melon"],
+  colors: ["red", "blue", "green", "yellow", "black", "white", "purple"],
+  sports: ["cricket", "football", "tennis", "hockey", "badminton"],
+  apps: ["instagram", "whatsapp", "snapchat", "spotify", "youtube"],
 };
 
 export default function HerdGame({
   room,
   players,
   currentPlayer,
-  onUpdateRoom,
+  gameState,
+  onUpdateState,
+  onEndGame,
 }: HerdGameProps) {
-  const gameState = room.game_state?.herd || {
+  const herd = gameState.herd ?? {
     round: 1,
-    scores: {},
+    topic: randomTopic(),
     answers: {},
+    scores: {},
     eliminated: [],
-    topic: null,
+    computerWord: null,
   };
 
+  const alivePlayers = players.filter((p) => !herd.eliminated.includes(p.player_id));
+
+  const myAnswer = herd.answers[currentPlayer.player_id];
   const [input, setInput] = useState("");
-  const [status, setStatus] = useState("");
 
-  // Ensure each player has score entry
+  /** ---- INITIAL SCORE SETUP ---- **/
   useEffect(() => {
-    const newScores = { ...gameState.scores };
+    const updated = { ...herd.scores };
     players.forEach((p) => {
-      if (newScores[p.id] === undefined) newScores[p.id] = 0;
+      if (updated[p.player_id] === undefined) updated[p.player_id] = 0;
     });
-    if (JSON.stringify(newScores) !== JSON.stringify(gameState.scores)) {
-      updateGame({ scores: newScores });
-    }
-  }, [players]);
-
-  // Pick random topic for first round
-  useEffect(() => {
-    if (!gameState.topic) {
-      const randomTopic = Object.keys(TOPICS)[
-        Math.floor(Math.random() * Object.keys(TOPICS).length)
-      ];
-      updateGame({ topic: randomTopic });
-    }
+    push({ scores: updated });
   }, []);
 
-  const updateGame = (newData: any) => {
-    const newState = {
-      ...room.game_state,
-      herd: { ...gameState, ...newData },
-    };
-    onUpdateRoom({ game_state: newState });
-    supabase.from("rooms").update({ game_state: newState }).eq("id", room.id);
-  };
-
-  const handleSubmit = () => {
+  /** ---- SUBMIT ANSWER ---- **/
+  const submitAnswer = () => {
     if (!input.trim()) return;
-    const newAnswers = {
-      ...gameState.answers,
-      [currentPlayer.id]: input.trim().toLowerCase(),
-    };
-    updateGame({ answers: newAnswers });
+
+    push({
+      answers: {
+        ...herd.answers,
+        [currentPlayer.player_id]: input.trim().toLowerCase(),
+      },
+    });
+
     setInput("");
-    setStatus("🐮 Waiting for others...");
   };
 
-  // Evaluate once all alive players answered
+  /** ---- AUTO EVALUATE WHEN ALL ANSWER ---- **/
   useEffect(() => {
-    const alivePlayers = players.filter(
-      (p) => !gameState.eliminated.includes(p.id)
-    );
-    const allAnswered = alivePlayers.every((p) => gameState.answers[p.id]);
-    if (allAnswered && alivePlayers.length >= 2) {
-      evaluateRound();
-    }
-  }, [gameState.answers]);
+    if (alivePlayers.every((p) => herd.answers[p.player_id])) evaluate();
+  }, [herd.answers]);
 
-  const evaluateRound = () => {
-    const answers = Object.values(gameState.answers);
-    const counts: Record<string, number> = {};
-    answers.forEach((a) => (counts[a] = (counts[a] || 0) + 1));
+  /** ---- EVALUATION LOGIC ---- **/
+  function evaluate() {
+    const newScores = { ...herd.scores };
+    let eliminated = [...herd.eliminated];
+    let compWord = herd.computerWord || null;
 
-    const alivePlayers = players.filter(
-      (p) => !gameState.eliminated.includes(p.id)
-    );
-    const newScores = { ...gameState.scores };
-    const eliminated = [...gameState.eliminated];
-
-    // Computer logic when only 2 players remain
-    let computerWord: string | null = null;
+    /** IF 2 PLAYERS LEFT → COMPUTER PICKS WORD **/
     if (alivePlayers.length === 2) {
-      const topic = gameState.topic || "animals";
-      const topicWords = TOPICS[topic];
-      computerWord = topicWords[Math.floor(Math.random() * topicWords.length)];
+      if (!compWord) compWord = randomWord(herd.topic);
+      const [A, B] = alivePlayers;
+
+      const a = herd.answers[A.player_id];
+      const b = herd.answers[B.player_id];
+
+      if (a !== compWord && b !== compWord) {
+        if (a !== b) {
+          newScores[A.player_id] -= 1;
+          newScores[B.player_id] -= 1;
+        }
+      } else if (a === compWord && b !== compWord) {
+        newScores[B.player_id] -= 1;
+      } else if (b === compWord && a !== compWord) {
+        newScores[A.player_id] -= 1;
+      }
+    } else {
+      /** NORMAL ROUND **/
+      const count: Record<string, number> = {};
+      Object.values(herd.answers).forEach((a) => {
+        count[a] = (count[a] ?? 0) + 1;
+      });
+
+      const max = Math.max(...Object.values(count));
+      const majorities = Object.keys(count).filter((k) => count[k] === max);
+
+      alivePlayers.forEach((p) => {
+        const ans = herd.answers[p.player_id];
+        if (!majorities.includes(ans)) newScores[p.player_id] -= 1;
+      });
     }
 
-    alivePlayers.forEach((p) => {
-      const answer = gameState.answers[p.id];
-      const isMinority = counts[answer] === 1;
-
-      // special 2-player rule
-      if (alivePlayers.length === 2 && computerWord) {
-        const other = alivePlayers.find((x) => x.id !== p.id)!;
-        const otherAns = gameState.answers[other.id];
-        if (answer === computerWord) return; // safe
-        if (otherAns === answer) return; // both safe if same non-computer word
-        newScores[p.id] -= 1;
-      } else {
-        if (isMinority) newScores[p.id] -= 1;
-      }
-
-      if (newScores[p.id] <= -6 && !eliminated.includes(p.id)) {
-        eliminated.push(p.id);
-      }
+    /** ELIMINATION **/
+    players.forEach((p) => {
+      if (newScores[p.player_id] <= -6 && !eliminated.includes(p.player_id))
+        eliminated.push(p.player_id);
     });
 
-    const nextRound = gameState.round + 1;
-    const newTopic =
-      Object.keys(TOPICS)[Math.floor(Math.random() * Object.keys(TOPICS).length)];
+    /** GAME OVER **/
+    if (alivePlayers.length <= 1)
+      return onEndGame();
 
-    updateGame({
-      round: nextRound,
+    /** NEXT ROUND **/
+    push({
+      round: herd.round + 1,
+      topic: randomTopic(),
       scores: newScores,
-      answers: {},
       eliminated,
-      topic: newTopic,
+      answers: {},
+      computerWord: alivePlayers.length === 2 ? compWord : null,
     });
+  }
 
-    setStatus(`🐮 Round ${nextRound} starting!`);
-  };
+  function push(patch: any) {
+    onUpdateState({
+      herd: { ...herd, ...patch },
+    });
+  }
 
+  /** ---- UI ---- **/
   return (
-    <div className="flex flex-col items-center justify-center h-full text-center">
-      <h2 className="text-2xl font-bold mb-2">🐮 Herd Mentality</h2>
-      <p className="mb-4 text-gray-600">
-        Round {gameState.round} — Topic:{" "}
-        <span className="font-semibold capitalize">{gameState.topic}</span>
-      </p>
+    <div className="text-center p-6">
+      <h1 className="text-3xl font-black mb-1">🐮 HERD MENTALITY</h1>
+      <p className="text-gray-600 mb-4">Round {herd.round}</p>
 
-      {!gameState.eliminated.includes(currentPlayer.id) ? (
+      <h2 className="text-xl font-bold">
+        TOPIC: <span className="capitalize">{herd.topic}</span>
+      </h2>
+
+      {!herd.eliminated.includes(currentPlayer.player_id) ? (
         <>
-          {!gameState.answers[currentPlayer.id] ? (
-            <div className="flex flex-col items-center space-y-3">
+          {!myAnswer && (
+            <div className="mt-4 space-y-2">
               <input
-                type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                className="border border-gray-400 rounded px-3 py-2 text-center w-48"
-                placeholder={`Your ${gameState.topic}...`}
+                className="border px-3 py-2 rounded"
+                placeholder="Your answer..."
               />
               <button
-                onClick={handleSubmit}
-                className="bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600"
+                onClick={submitAnswer}
+                className="bg-pink-500 text-white px-4 py-2 rounded-lg"
               >
                 Submit
               </button>
             </div>
-          ) : (
-            <p className="text-gray-700">{status}</p>
           )}
+
+          {myAnswer && <p className="mt-4 text-gray-500">Waiting for others…</p>}
         </>
       ) : (
-        <p className="text-red-500 font-semibold">You’re out! 💀</p>
+        <p className="mt-4 text-red-500 font-bold">❌ You’re Out!</p>
       )}
 
       <div className="mt-6">
-        <h3 className="font-semibold mb-2">Scores:</h3>
+        <h3 className="font-semibold mb-1">SCORES:</h3>
         {players.map((p) => (
-          <div
-            key={p.id}
-            className={`${
-              gameState.eliminated.includes(p.id)
-                ? "text-gray-400 line-through"
-                : "text-black"
-            }`}
+          <p
+            key={p.player_id}
+            className={herd.eliminated.includes(p.player_id)
+              ? "line-through text-gray-400"
+              : ""}
           >
-            {p.name}: {gameState.scores[p.id] ?? 0}
-          </div>
+            {p.name}: {herd.scores[p.player_id] ?? 0}
+          </p>
         ))}
       </div>
+
+      {herd.computerWord && (
+        <p className="mt-3 text-indigo-600 text-sm">
+          🤖 Secret computer word selected!
+        </p>
+      )}
     </div>
   );
+}
+
+/** HELPERS */
+function randomTopic() {
+  const keys = Object.keys(TOPICS);
+  return keys[Math.floor(Math.random() * keys.length)];
+}
+
+function randomWord(topic: string) {
+  const list = TOPICS[topic];
+  return list[Math.floor(Math.random() * list.length)];
 }
