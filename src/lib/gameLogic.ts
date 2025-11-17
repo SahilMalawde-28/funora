@@ -500,7 +500,48 @@ export interface BluffGameState {
 
 export const initBluffGame = (playerIds: string[]): BluffGameState => {
   const questions = [
-    
+    { real: "Who’s someone you wanted to sleep with but never got the chance to?", fake: "Who’s someone you wanted to prank but never did?" },
+  { real: "What’s a secret you’ve kept from your last partner?", fake: "What’s a secret you’ve kept from your last classmate?" },
+  { real: "What’s something you did under the influence that you're still ashamed of?", fake: "What’s something you ate under the influence that you’re still ashamed of?" },
+  { real: "Who’s someone you ghosted after getting what you wanted?", fake: "Who’s someone you unfollowed after a group fight?" },
+  { real: "What’s a moment in bed that still haunts you?", fake: "What’s a lie in a viva that still haunts you?" },
+  { real: "Who’s someone you shared your deepest fears with but they walked away?", fake: "Who’s someone you shared your notes with but they walked away after exams?" },
+  { real: "What’s something you wanted to try in bed but never confessed?", fake: "What’s something you wanted to try in class but never asked?" },
+
+  
+  { real: "What’s a food you secretly hate but pretend to love?", fake: "Who’s someone you still think about even after they broke you?" },
+  { real: "Who’s the one classmate you never want to do a project with again?", fake: "Who’s someone you’d forgive even if they never apologize?" },
+  { real: "What’s something you say you’re good at but know you’re not?", fake: "What’s something you said to keep someone who was already leaving?" },
+  { real: "What’s a trend you pretended to like just to fit in?", fake: "What’s a feeling you get every night that no one knows about?" },
+  { real: "What’s a chore you’ve been avoiding for weeks?", fake: "What’s something you regret giving someone who didn’t deserve it?" },
+  { real: "Who’s someone you text only when you're bored?", fake: "Who’s someone you still love but pretend to hate?" },
+  { real: "What’s a secret snack you eat late at night?", fake: "What’s something you cried about but told everyone you were fine?" },
+  { real: "Who’s the worst person to watch a movie with?", fake: "Who’s someone you wish stayed even though they left?" },
+  { real: "What’s a subject you pretend to enjoy?", fake: "What’s a truth that broke you when you finally accepted it?" },
+  { real: "What’s a celeb you think is overrated?", fake: "Who’s someone you miss even though they hurt you?" },
+  
+  { real: "What’s a hobby you wish you were better at?", fake: "What’s a memory you replay even though it hurts every time?" },
+  { real: "Who’s someone you stopped texting on purpose?", fake: "Who’s someone you wish you never let go?" },
+  { real: "What’s a song everyone loves but you don’t?", fake: "What’s something you hide from everyone because it still hurts?" },
+  { real: "What’s a phone app you’re embarrassed to still use?", fake: "What’s something you did for love that you still regret?" },
+  { real: "What’s a habit you secretly judge others for?", fake: "What’s a part of yourself you’re scared to show people?" },
+  { real: "Who’s the first person you mute when the group chat gets annoying?", fake: "Who’s someone you still care about but pretend you’re over?" },
+  { real: "What’s a subject you only passed because of luck?", fake: "What’s something that destroyed your confidence for a while?" },
+  { real: "What’s a gadget you bought and never used?", fake: "What’s a lesson you learned too late?" },
+  { real: "Who’s someone you avoid in hallways?", fake: "Who’s the one that got away but you still hope returns?" },
+  { real: "What’s something you Google more than you admit?", fake: "What’s a memory you regret creating?" },
+  
+  { real: "What’s your most useless skill?", fake: "What’s something you wanted to say but never could?" },
+  { real: "Who’s someone you owe a call but keep forgetting?", fake: "Who’s someone you gave your heart to but got nothing back?" },
+  { real: "What’s a fashion trend you regret copying?", fake: "What’s something you wish you told them before they left?" },
+  { real: "What’s a daily habit you pretend is healthy?", fake: "What’s something you keep pretending doesn’t hurt anymore?" },
+  { real: "Who’s someone you stalk for funny reels?", fake: "Who’s someone you stalk because you can’t let go?" },
+  { real: "What’s the worst food combination you’ve tried?", fake: "What’s a truth you told that pushed someone away forever?" },
+  { real: "What’s a song you skip when people are around?", fake: "What’s a feeling you’ve had to numb to move on?" },
+  { real: "Who’s someone you wouldn’t lend money to?", fake: "Who’s someone you’d give everything to even today?" },
+  { real: "What’s a movie you fell asleep watching?", fake: "What’s a dream you let go because it scared you?" },
+  { real: "What’s a gift you re-gifted?", fake: "What’s something precious you lost and still search for?" }
+,
   { real: "What’s something you ruined because you were scared of losing it?", fake: "What’s something you returned because you were scared it wouldn't work?" },
   { real: "Who’s the person you still wait for, even when you know they aren’t coming?", fake: "What’s the notification you still check for even when it never comes?" },
   { real: "What’s a habit you picked up for someone and never dropped after they left?", fake: "What’s a shortcut you learned in college and still use wrongly?" },
