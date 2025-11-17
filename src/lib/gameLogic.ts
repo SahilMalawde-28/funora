@@ -501,7 +501,7 @@ export interface BluffGameState {
 export const initBluffGame = (playerIds: string[]): BluffGameState => {
   const questions = [
     
-{ real: "Who’s someone you wish never stopped loving you?", fake: "Who’s someone you wish never stopped lending you notes?" },
+{ real: "Who’s someone you wish starts loving you?", fake: "Who’s someone you wish never stopped lending you notes?" },
 { real: "What’s something you did out of love that you’d never admit?", fake: "What’s something you did for marks that you’d never admit?" },
 { real: "Who’s the person you still stalk just to feel close again?", fake: "Who’s the person whose profile you check just for outfit ideas?" },
 { real: "What’s a night you wish you could relive just once?", fake: "What’s a movie night you wish hadn’t ended so fast?" },
