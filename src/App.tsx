@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, Room, Player } from './lib/supabase';
 import { createRoom, joinRoom, getPlayers, updateRoomState } from './lib/roomService';
-import { initImposterGame, initBluffGame, initTeamGame, initWavelengthGame, initWordGuessGame, initChainGame, initBoilingWaterGame,initUnoGame,initMemoryGameState,initHerdGame,initChamaleonGame } from './lib/gameLogic';
+import { initImposterGame, initBluffGame, initTeamGame, initWavelengthGame, initWordGuessGame, initChainGame, initBoilingWaterGame,initUnoGame,initMemoryGameState,initHerdGame,initChameleonGame } from './lib/gameLogic';
 import Home from './components/Home';
 import Lobby from './components/Lobby';
 import ImposterGame from './components/games/ImposterGame';
@@ -13,7 +13,7 @@ import ChainGame from './components/games/ChainGame';
 import BoilingGame from './components/games/BoilingGame';
 import MemoryGame from './components/games/MemoryGame';
 import HerdGame from './components/games/HerdGame';
-import ChamaleonGame from './components/games/ChamaleonGame';
+import ChameleonGame from './components/games/ChamaleonGame';
 
 
 function App() {
@@ -257,7 +257,7 @@ function App() {
     case 'herd':                      // ✅ NEW
       return <HerdGame {...gameProps} />;
     case 'cham':                      // ✅ NEW
-      return <ChamaleonGame {...gameProps} />;
+      return <ChameleonGame {...gameProps} />;
     default:
       return (
         <Lobby
