@@ -70,7 +70,14 @@ export const GAMES = [
     description: 'Blend with others',
     emoji: '🦎',
     minPlayers: 3
-  }
+  },
+  {
+  id: 'coup',
+  name: 'Coup – Funora',
+  description: 'Bluff, block, steal, assassinate, survive.',
+  emoji: '🕵️‍♂️',
+  minPlayers: 3
+}
 ];
 
 export interface ImposterGameState {
