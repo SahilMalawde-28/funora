@@ -3406,3 +3406,102 @@ export const initChameleonGame = (playerIds: string[]): ChameleonGameState => {
   };
 };
 
+// ===========================================
+// 🃏 COUP-LIKE GAME (FUNORA EDITION)
+// Roles: Chancellor, Shadow, Agent, Diplomat, Protector
+// ===========================================
+
+export type CoupRole =
+  | "chancellor"  // Duke
+  | "shadow"      // Assassin
+  | "agent"       // Captain
+  | "diplomat"    // Ambassador
+  | "protector";  // Contessa
+
+export interface CoupInfluence {
+  id: string;        // unique per card, used when choosing which to reveal
+  role: CoupRole;
+  revealed: boolean; // true when lost
+}
+
+export interface CoupPlayerState {
+  playerId: string;
+  coins: number;
+  influences: CoupInfluence[]; // usually 2, can go down
+  alive: boolean;              // at least one unrevealed influence
+}
+
+export type CoupPhase =
+  | "choose_action"              // current player choosing main action
+  | "pending_challenge_on_action"
+  | "pending_block"
+  | "pending_challenge_on_block"
+  | "choose_influence_to_lose"   // someone must pick which card to flip
+  | "exchange_cards"             // Diplomat exchange UI
+  | "game_over";
+
+export type CoupActionType =
+  | "income"
+  | "foreign_aid"
+  | "tax"          // Chancellor
+  | "assassinate"  // Shadow
+  | "steal"        // Agent
+  | "exchange"     // Diplomat
+  | "coup";
+
+export interface CoupPendingAction {
+  actorId: string;
+  type: CoupActionType;
+  claimedRole?: CoupRole; // for tax/assassinate/steal/exchange
+  targetId?: string;      // for assassinate, steal, coup
+}
+
+export interface CoupPendingBlock {
+  blockerId: string;
+  role: CoupRole; // chancellor/shadow/agent/diplomat/protector (per rules)
+  blockingAction: CoupActionType; // foreign_aid / assassinate / steal
+}
+
+export type CoupChallengeWindow =
+  | {
+      kind: "action";
+      challengedPlayerId: string;
+      claimedRole: CoupRole;
+    }
+  | {
+      kind: "block";
+      challengedPlayerId: string;
+      claimedRole: CoupRole;
+    };
+
+export interface CoupRevealInfo {
+  revealedPlayerId?: string; // who just flipped / showed a card
+  revealedRole?: CoupRole;
+  loserPlayerId?: string;   // who must lose an influence now
+}
+
+export interface CoupLogEntry {
+  id: string;
+  text: string;
+  ts: number;
+}
+
+export interface CoupGameState {
+  players: Record<string, CoupPlayerState>;
+  deck: CoupInfluence[];
+
+  turnOrder: string[];      // playerIds in turn order
+  currentTurnIndex: number; // index into turnOrder
+
+  phase: CoupPhase;
+
+  pendingAction: CoupPendingAction | null;
+  pendingBlock: CoupPendingBlock | null;
+  challengeWindow: CoupChallengeWindow | null;
+
+  revealInfo: CoupRevealInfo | null;
+
+  activityLog: CoupLogEntry[];
+
+  winnerId: string | null;
+}
