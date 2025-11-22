@@ -263,6 +263,8 @@ function App() {
       return <HerdGame {...gameProps} />;
     case 'cham':                      // ✅ NEW
       return <ChameleonGame {...gameProps} />;
+    case 'coup':                      // ✅ NEW
+      return <CoupGame {...gameProps} />;
     default:
       return (
         <Lobby
