@@ -256,6 +256,8 @@ function App() {
       return <MemoryGame {...gameProps} />;
     case 'herd':                      // ✅ NEW
       return <HerdGame {...gameProps} />;
+    case 'cham':                      // ✅ NEW
+      return <ChamaleonGame {...gameProps} />;
     default:
       return (
         <Lobby
