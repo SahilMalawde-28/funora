@@ -3343,7 +3343,12 @@ export interface ChameleonGameState {
   currentHintIndex: number;
   votes: Record<string, string | null>;
   imposterGuess: string | null;
+
+  // 🔥 NEW:
+  activePlayers: string[];      // players still in the game
+  round: number;                // 1, 2, 3, ...
 }
+
 
 
 // ======================================================
