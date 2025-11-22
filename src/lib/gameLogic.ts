@@ -3505,3 +3505,83 @@ export interface CoupGameState {
 
   winnerId: string | null;
 }
+
+// Create the full deck: 3 copies of each of the 5 roles (standard Coup = 15 cards)
+// Chancellor (Duke), Shadow (Assassin), Agent (Captain), Diplomat (Ambassador), Protector (Contessa)
+const createCoupDeck = (): CoupInfluence[] => {
+  const roles: CoupRole[] = [
+    "chancellor",
+    "shadow",
+    "agent",
+    "diplomat",
+    "protector",
+  ];
+  const deck: CoupInfluence[] = [];
+
+  roles.forEach((role) => {
+    for (let i = 0; i < 3; i++) {
+      deck.push({
+        id: `${role}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+        role,
+        revealed: false,
+      });
+    }
+  });
+
+  return shuffleC(deck);
+};
+
+export const initCoupGame = (playerIds: string[]): CoupGameState => {
+  if (playerIds.length < 3) {
+    throw new Error("Coup needs at least 3 players.");
+  }
+
+  // 1️⃣ Build and shuffle deck
+  let deck = createCoupDeck();
+
+  // 2️⃣ Deal 2 influences to each player
+  const players: Record<string, CoupPlayerState> = {};
+  for (const pid of playerIds) {
+    const dealt: CoupInfluence[] = [];
+    for (let i = 0; i < 2; i++) {
+      const card = deck.pop();
+      if (!card) {
+        throw new Error("Not enough cards in Coup deck.");
+      }
+      dealt.push(card);
+    }
+
+    players[pid] = {
+      playerId: pid,
+      coins: 2,          // standard Coup starting coins
+      influences: dealt, // 2 hidden roles
+      alive: true,
+    };
+  }
+
+  // 3️⃣ Turn order: keep as given (or shuffle if you prefer)
+  const turnOrder = [...playerIds]; // you can do shuffleC(playerIds) if you want random starter
+
+  // 4️⃣ Initial game state
+  const initialState: CoupGameState = {
+    players,
+    deck,
+    turnOrder,
+    currentTurnIndex: 0,
+    phase: "choose_action",
+    pendingAction: null,
+    pendingBlock: null,
+    challengeWindow: null,
+    revealInfo: null,
+    activityLog: [
+      {
+        id: `log-${Date.now()}`,
+        text: `Coup game started with ${playerIds.length} players.`,
+        ts: Date.now(),
+      },
+    ],
+    winnerId: null,
+  };
+
+  return initialState;
+};
