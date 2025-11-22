@@ -66,7 +66,7 @@ export const GAMES = [
   },
   {
     id: 'cham',
-    name: 'Chamaleon',
+    name: 'Chameleon',
     description: 'Blend with others',
     emoji: '🦎',
     minPlayers: 3
