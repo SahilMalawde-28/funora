@@ -163,7 +163,7 @@ function App() {
         gameState = initHerdGame(playerIds);
         break;
       case 'cham':
-        gameState = initChamaleonGame(playerIds);
+        gameState = initChameleonGame(playerIds);
       default:
         return;
     }
