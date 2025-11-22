@@ -75,7 +75,7 @@ export const GAMES = [
     id: 'coup',
     name: 'Coup – Funora',
     description: 'Bluff, block, steal, assassinate, survive.',
-    emoji: '🕵️‍♂️',
+    emoji: '🪙',
     minPlayers: 3
  }
 ];
