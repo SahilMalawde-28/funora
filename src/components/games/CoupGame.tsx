@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Room, Player } from "../../lib/supabase";
 import {
   CoupGameState,
@@ -11,7 +11,6 @@ import {
   Coins,
   Swords,
   Shield,
-  UserCircle2,
   Crown,
   AlertTriangle,
   Shuffle,
@@ -40,26 +39,27 @@ export default function CoupGame({
   const isHost = room.host_id === myId;
 
   const [pendingTargetAction, setPendingTargetAction] = useState<
-    | null
-    | "assassinate"
-    | "steal"
-    | "coup"
+    null | "assassinate" | "steal" | "coup"
   >(null);
 
-  const myState = gameState.players[myId];
+  // Local Diplomat exchange state (ONLY UI state, final effect goes into gameState)
+  const [exchangeOptions, setExchangeOptions] = useState<CoupInfluence[] | null>(
+    null
+  );
+  const [exchangeSelectedIds, setExchangeSelectedIds] = useState<string[]>([]);
 
+  const myState = gameState.players[myId];
   const currentTurnPlayerId = gameState.turnOrder[gameState.currentTurnIndex];
   const currentTurnPlayerState = gameState.players[currentTurnPlayerId];
-
   const isMyTurn =
     gameState.phase === "choose_action" && currentTurnPlayerId === myId;
+
+  const findPlayer = (id: string) =>
+    players.find((p) => p.player_id === id) || null;
 
   const alivePlayers = gameState.turnOrder
     .map((pid) => gameState.players[pid])
     .filter((p) => p.alive);
-
-  const findPlayer = (id: string) =>
-    players.find((p) => p.player_id === id) || null;
 
   const addLog = (text: string) => {
     const log: CoupGameState["activityLog"] = [
@@ -97,6 +97,25 @@ export default function CoupGame({
       };
     }
     return state;
+  };
+
+  const applyCoinsChange = (
+    state: CoupGameState,
+    playerId: string,
+    delta: number
+  ): CoupGameState => {
+    const p = state.players[playerId];
+    if (!p) return state;
+    return {
+      ...state,
+      players: {
+        ...state.players,
+        [playerId]: {
+          ...p,
+          coins: Math.max(0, p.coins + delta),
+        },
+      },
+    };
   };
 
   const loseInfluence = (
@@ -138,25 +157,6 @@ export default function CoupGame({
     return newState;
   };
 
-  const applyCoinsChange = (
-    state: CoupGameState,
-    playerId: string,
-    delta: number
-  ): CoupGameState => {
-    const p = state.players[playerId];
-    if (!p) return state;
-    return {
-      ...state,
-      players: {
-        ...state.players,
-        [playerId]: {
-          ...p,
-          coins: Math.max(0, p.coins + delta),
-        },
-      },
-    };
-  };
-
   const applyActionEffect = (state: CoupGameState): CoupGameState => {
     const action = state.pendingAction;
     if (!action) return state;
@@ -180,7 +180,7 @@ export default function CoupGame({
     if (action.type === "tax") {
       s = applyCoinsChange(s, action.actorId, +3);
       addLog(
-        `💼 Chancellor move: ${
+        `💼 Chancellor: ${
           findPlayer(action.actorId)?.name ?? "?"
         } takes 3 coins`
       );
@@ -218,9 +218,9 @@ export default function CoupGame({
         addLog(
           `🗡 Shadow: ${
             findPlayer(action.actorId)?.name ?? "?"
-          } successfully assassinates ${
+          } assassinates ${
             findPlayer(action.targetId)?.name ?? "?"
-          }`
+          } (if not blocked)`
         );
         s = {
           ...s,
@@ -256,42 +256,8 @@ export default function CoupGame({
       }
     }
 
-    if (action.type === "exchange") {
-      const actor = s.players[action.actorId];
-      if (actor && actor.alive) {
-        const newDeck = [...s.deck];
-        const drawn: CoupInfluence[] = [];
-        for (let i = 0; i < 2 && newDeck.length > 0; i++) {
-          const card = newDeck.pop();
-          if (card) drawn.push(card);
-        }
-        const pool = [...actor.influences.filter((i) => !i.revealed), ...drawn];
-        const keep = shuffleC(pool).slice(0, actor.influences.length);
-        const newInfluences = keep.concat(
-          actor.influences.filter((i) => i.revealed)
-        );
-
-        const newPlayers = {
-          ...s.players,
-          [actor.playerId]: {
-            ...actor,
-            influences: newInfluences,
-          },
-        };
-
-        addLog(
-          `🎭 Diplomat: ${
-            findPlayer(action.actorId)?.name ?? "?"
-          } exchanges cards`
-        );
-
-        s = {
-          ...s,
-          players: newPlayers,
-          deck: newDeck,
-        };
-      }
-    }
+    // NOTE: Diplomat (exchange) is handled separately via phase=exchange_cards and the modal.
+    // We DO NOT auto-apply exchange here anymore.
 
     s.pendingAction = null;
     s.pendingBlock = null;
@@ -304,7 +270,14 @@ export default function CoupGame({
     return s;
   };
 
-  const startAction = (type: CoupActionType, targetId?: string) => {
+  const startAction = (
+    type: CoupGameState["pendingAction"] extends infer _T
+      ? _T extends { type: infer U }
+        ? U
+        : never
+      : never,
+    targetId?: string
+  ) => {
     if (!isMyTurn || !myState?.alive) return;
 
     let s: CoupGameState = { ...gameState };
@@ -318,7 +291,7 @@ export default function CoupGame({
 
     if (type === "foreign_aid") {
       s.pendingAction = { actorId: myId, type };
-      s.phase = "pending_block"; // only Chancellor (Duke) can block foreign aid
+      s.phase = "pending_block";
       addLog(
         `💰 ${
           findPlayer(myId)?.name ?? "?"
@@ -417,7 +390,7 @@ export default function CoupGame({
   const handlePlayerCardClick = (pid: string) => {
     if (!isMyTurn || !pendingTargetAction) return;
     if (pid === myId) return;
-    startAction(pendingTargetAction, pid);
+    startAction(pendingTargetAction as any, pid);
     setPendingTargetAction(null);
   };
 
@@ -455,7 +428,12 @@ export default function CoupGame({
     return true;
   };
 
-  const resolveChallenge = (truthful: boolean, challengedId: string, role: CoupRole, challengerId: string) => {
+  const resolveChallenge = (
+    truthful: boolean,
+    challengedId: string,
+    role: CoupRole,
+    challengerId: string
+  ) => {
     let s: CoupGameState = { ...gameState };
 
     if (truthful) {
@@ -525,7 +503,13 @@ export default function CoupGame({
     if (act.type === "tax") {
       s = applyActionEffect(s);
     } else if (act.type === "exchange") {
-      s = applyActionEffect(s);
+      // Diplomat: move to exchange_cards phase (ONLY for actor)
+      s.phase = "exchange_cards";
+      addLog(
+        `🎭 ${
+          findPlayer(act.actorId)?.name ?? "?"
+        } is exchanging influence cards...`
+      );
     } else if (act.type === "assassinate" || act.type === "steal") {
       s.phase = "pending_block";
       addLog(`➡ Waiting for possible block...`);
@@ -628,6 +612,162 @@ export default function CoupGame({
     onUpdateState(newState);
   };
 
+  // ---------------- Diplomat Exchange UI & Logic ----------------
+
+  // When we enter exchange_cards phase and we are the actor, compute options.
+  useEffect(() => {
+    if (
+      gameState.phase === "exchange_cards" &&
+      gameState.pendingAction?.type === "exchange" &&
+      gameState.pendingAction.actorId === myId &&
+      myState?.alive
+    ) {
+      if (!exchangeOptions) {
+        const me = gameState.players[myId];
+        const alive = me.influences.filter((i) => !i.revealed);
+        const deck = gameState.deck;
+        const drawn: CoupInfluence[] = [];
+        // Draw top 2 from deck (end of array)
+        for (let i = 0; i < 2 && deck.length - 1 - i >= 0; i++) {
+          drawn.push(deck[deck.length - 1 - i]);
+        }
+        const options = [...alive, ...drawn];
+        setExchangeOptions(options);
+        // Start with your current card if only 1 (makes sense)
+        if (alive.length === 1) {
+          setExchangeSelectedIds([alive[0].id]);
+        } else {
+          setExchangeSelectedIds([]);
+        }
+      }
+    } else {
+      if (exchangeOptions) {
+        setExchangeOptions(null);
+        setExchangeSelectedIds([]);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState.phase, gameState.pendingAction, gameState.deck, myId]);
+
+  const isExchangeActor =
+    gameState.phase === "exchange_cards" &&
+    gameState.pendingAction?.type === "exchange" &&
+    gameState.pendingAction.actorId === myId &&
+    myState?.alive;
+
+  const handleToggleExchangeSelect = (id: string) => {
+    if (!exchangeOptions || !isExchangeActor) return;
+    const me = gameState.players[myId];
+    const alive = me.influences.filter((i) => !i.revealed);
+    const aliveIds = alive.map((a) => a.id);
+    const options = exchangeOptions;
+    const drawn = options.filter((opt) => !aliveIds.includes(opt.id));
+    const drawnIds = drawn.map((d) => d.id);
+
+    if (alive.length === 1) {
+      // Single influence case: choose exactly 1 card
+      setExchangeSelectedIds([id]);
+      return;
+    }
+
+    // 2+ alive influences: must end with exactly alive.length selections,
+    // and at most ONE of them can be a new card (from drawn)
+    let next = [...exchangeSelectedIds];
+    if (next.includes(id)) {
+      next = next.filter((x) => x !== id);
+    } else {
+      // add if we don't exceed alive.length
+      if (next.length >= alive.length) return;
+      // if this is a drawn card, ensure we don't already have a drawn selected
+      const isNew = drawnIds.includes(id);
+      if (isNew) {
+        const newCount = next.filter((selId) =>
+          drawnIds.includes(selId)
+        ).length;
+        if (newCount >= 1) {
+          // already 1 new selected, can't take second new
+          return;
+        }
+      }
+      next.push(id);
+    }
+    setExchangeSelectedIds(next);
+  };
+
+  const handleConfirmExchange = () => {
+    if (!isExchangeActor || !exchangeOptions) return;
+    const me = gameState.players[myId];
+    const alive = me.influences.filter((i) => !i.revealed);
+    const revealed = me.influences.filter((i) => i.revealed);
+    const aliveIds = alive.map((a) => a.id);
+
+    // figure out which in options are newly drawn
+    const drawn = exchangeOptions.filter((opt) => !aliveIds.includes(opt.id));
+    const drawnIds = drawn.map((d) => d.id);
+
+    if (alive.length === 1) {
+      if (exchangeSelectedIds.length !== 1) return;
+    } else {
+      if (exchangeSelectedIds.length !== alive.length) return;
+      const newCount = exchangeSelectedIds.filter((id) =>
+        drawnIds.includes(id)
+      ).length;
+      if (newCount > 1) {
+        // violating rule: only 1 new card max
+        return;
+      }
+    }
+
+    // Build new alive influences
+    const selected: CoupInfluence[] = exchangeOptions.filter((opt) =>
+      exchangeSelectedIds.includes(opt.id)
+    );
+    const notSelected: CoupInfluence[] = exchangeOptions.filter(
+      (opt) => !exchangeSelectedIds.includes(opt.id)
+    );
+
+    // Remove drawn from deck, then add back notSelected (old+new) and shuffle
+    let baseDeck = gameState.deck.filter(
+      (card) => !drawnIds.includes(card.id)
+    );
+    baseDeck = [...baseDeck, ...notSelected];
+    const newDeck = shuffleC(baseDeck);
+
+    const newInfluences = [...selected, ...revealed];
+
+    const newPlayers = {
+      ...gameState.players,
+      [myId]: {
+        ...me,
+        influences: newInfluences,
+      },
+    };
+
+    let s: CoupGameState = {
+      ...gameState,
+      players: newPlayers,
+      deck: newDeck,
+      pendingAction: null,
+      pendingBlock: null,
+      challengeWindow: null,
+      revealInfo: null,
+      phase: "choose_action",
+    };
+
+    s.currentTurnIndex = getNextTurnIndex(s);
+    s = checkGameOver(s);
+    addLog(
+      `🎭 ${findPlayer(myId)?.name ?? "?"} completes a Diplomat exchange.`
+    );
+    onUpdateState(s);
+
+    // Clean local modal state
+    setExchangeOptions(null);
+    setExchangeSelectedIds([]);
+  };
+
+  // ---------------- UI helpers ----------------
+
   if (!myState) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -639,17 +779,16 @@ export default function CoupGame({
   const renderRoleCard = (
     emoji: string,
     title: string,
-    keyRole: CoupRole,
     action: string,
     extra: string
   ) => (
-    <div className="bg-slate-900/80 border border-slate-700 rounded-2xl p-3 text-sm flex flex-col gap-1">
+    <div className="bg-slate-900/90 border border-slate-700 rounded-2xl p-3 text-xs flex flex-col gap-1">
       <div className="flex items-center gap-2">
-        <span className="text-xl">{emoji}</span>
+        <span className="text-lg">{emoji}</span>
         <p className="font-semibold text-slate-100">{title}</p>
       </div>
-      <p className="text-xs text-slate-400">{action}</p>
-      <p className="text-[11px] text-slate-500">{extra}</p>
+      <p className="text-[11px] text-slate-300">{action}</p>
+      <p className="text-[10px] text-slate-500">{extra}</p>
     </div>
   );
 
@@ -671,7 +810,7 @@ export default function CoupGame({
         onClick={() =>
           selectable ? handleChooseInfluenceToLose(inf.id) : undefined
         }
-        className={`flex flex-col items-center justify-center rounded-2xl border w-28 h-40 text-xs font-semibold
+        className={`flex flex-col items-center justify-center rounded-2xl border w-24 h-32 md:w-28 md:h-40 text-[10px] md:text-xs font-semibold
           ${
             inf.revealed
               ? "border-red-500/60 bg-red-950/70 text-red-200 line-through"
@@ -680,9 +819,9 @@ export default function CoupGame({
           ${selectable ? "hover:border-red-400 hover:bg-red-950/60" : ""}
         `}
       >
-        <span className="text-3xl mb-2">{r.emoji}</span>
+        <span className="text-2xl md:text-3xl mb-2">{r.emoji}</span>
         <span>{r.name}</span>
-        {inf.revealed && <span className="mt-1 text-[10px]">LOST</span>}
+        {inf.revealed && <span className="mt-1 text-[9px]">LOST</span>}
       </button>
     );
   };
@@ -692,16 +831,19 @@ export default function CoupGame({
       return "Your turn: choose an action.";
     }
     if (gameState.phase === "pending_challenge_on_action") {
-      return "Someone has claimed a role. Others may challenge.";
+      return "Role claimed. Others may challenge.";
     }
     if (gameState.phase === "pending_block") {
-      return "Action can be blocked. Target/players may block.";
+      return "Action can be blocked.";
     }
     if (gameState.phase === "pending_challenge_on_block") {
-      return "Block has been declared. Others may challenge the block.";
+      return "Block claimed. Others may challenge.";
     }
     if (gameState.phase === "choose_influence_to_lose") {
       return "A player must choose a card to lose.";
+    }
+    if (gameState.phase === "exchange_cards") {
+      return "Diplomat is exchanging cards.";
     }
     if (gameState.phase === "game_over") {
       return "Game over.";
@@ -712,11 +854,11 @@ export default function CoupGame({
   if (gameState.phase === "game_over" && gameState.winnerId) {
     const winner = findPlayer(gameState.winnerId);
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-purple-900 text-white flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-slate-900/90 rounded-3xl border border-purple-500/50 shadow-2xl p-8 text-center space-y-4">
-          <Crown className="w-12 h-12 text-yellow-400 mx-auto mb-2" />
-          <h1 className="text-3xl font-black">Game Over</h1>
-          <p className="text-lg">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-purple-900 text-white flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-slate-900/90 rounded-3xl border border-purple-500/50 shadow-2xl p-6 text-center space-y-4">
+          <Crown className="w-10 h-10 text-yellow-400 mx-auto mb-1" />
+          <h1 className="text-2xl font-black">Game Over</h1>
+          <p className="text-base">
             Winner:{" "}
             <span className="font-bold text-purple-300">
               {winner?.name ?? "Unknown"}
@@ -724,7 +866,7 @@ export default function CoupGame({
           </p>
           <button
             onClick={onEndGame}
-            className="mt-4 w-full py-3 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 font-bold shadow hover:scale-105 transition"
+            className="mt-3 w-full py-2.5 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 font-bold shadow hover:scale-105 transition"
           >
             Back to Lobby
           </button>
@@ -735,41 +877,116 @@ export default function CoupGame({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100 flex flex-col">
-      <div className="flex flex-col md:flex-row gap-4 p-4 items-start">
-        <div className="flex-1 space-y-3">
+      {/* Diplomat Exchange Modal */}
+      {isExchangeActor && exchangeOptions && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-3">
+          <div className="max-w-md w-full bg-slate-900 rounded-3xl border border-slate-700 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Shuffle className="w-5 h-5 text-blue-400" />
+                <p className="text-sm font-semibold">
+                  Diplomat Exchange – Choose Your Card(s)
+                </p>
+              </div>
+              <span className="text-[10px] text-slate-400">
+                You can take at most 1 new role.
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-300">
+              Tap the card(s) you want to keep. Then confirm.
+            </p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {exchangeOptions.map((opt) => {
+                const me = gameState.players[myId];
+                const alive = me.influences.filter((i) => !i.revealed);
+                const aliveIds = alive.map((a) => a.id);
+                const isNew = !aliveIds.includes(opt.id);
+                const isSel = exchangeSelectedIds.includes(opt.id);
+                const roleMap: Record<CoupRole, { emoji: string; name: string }> =
+                  {
+                    chancellor: { emoji: "💼", name: "Chancellor" },
+                    shadow: { emoji: "🗡", name: "Shadow" },
+                    agent: { emoji: "🕵️", name: "Agent" },
+                    diplomat: { emoji: "🎭", name: "Diplomat" },
+                    protector: { emoji: "🛡", name: "Protector" },
+                  };
+                const r = roleMap[opt.role];
+
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => handleToggleExchangeSelect(opt.id)}
+                    className={`flex flex-col items-center justify-center rounded-2xl border w-20 h-28 text-[10px] font-semibold transition
+                      ${
+                        isSel
+                          ? "border-blue-400 bg-blue-950/70"
+                          : "border-slate-600 bg-slate-900"
+                      } hover:border-blue-400 hover:bg-blue-950/50
+                    `}
+                  >
+                    <span className="text-2xl mb-1">{r.emoji}</span>
+                    <span>{r.name}</span>
+                    <span className="mt-1 text-[9px] text-slate-400">
+                      {isNew ? "NEW" : "OLD"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={handleConfirmExchange}
+              className="w-full mt-1 py-2 rounded-2xl bg-blue-600 hover:bg-blue-500 text-sm font-semibold"
+            >
+              Confirm Exchange
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Top section: title, turn info, players + roles/log */}
+      <div className="flex flex-col lg:flex-row gap-3 p-3 items-start">
+        {/* Left: header + players */}
+        <div className="flex-1 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Crown className="w-6 h-6 text-purple-400" />
-              <h1 className="text-xl md:text-2xl font-black tracking-wide">
-                COUP – Funora Edition
+              <Crown className="w-5 h-5 text-purple-400" />
+              <h1 className="text-lg md:text-xl font-black tracking-wide">
+                Coup – Funora Edition
               </h1>
             </div>
-            <div className="text-xs text-slate-400 flex items-center gap-2">
-              <Info className="w-4 h-4" />
+            <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-400">
+              <Info className="w-3 h-3" />
               <span>{phaseHint}</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-slate-400">
+          <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
             <Users className="w-4 h-4" />
-            <span>Current turn: </span>
+            <span>Turn: </span>
             <span className="font-semibold text-slate-100">
               {findPlayer(currentTurnPlayerId)?.name ?? "?"}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
             {gameState.turnOrder.map((pid) => {
               const ps = gameState.players[pid];
               const pMeta = findPlayer(pid);
               const isTurn = pid === currentTurnPlayerId;
               const isMe = pid === myId;
 
+              const initials =
+                (pMeta?.name || "?")
+                  .split(" ")
+                  .map((part) => part[0]?.toUpperCase() || "")
+                  .slice(0, 2)
+                  .join("") || "?";
+
               return (
                 <button
                   key={pid}
                   onClick={() => handlePlayerCardClick(pid)}
-                  className={`relative rounded-2xl border p-3 flex flex-col gap-2 text-left transition
+                  className={`relative rounded-2xl border p-2 flex flex-col gap-2 text-left transition
                     ${
                       !ps.alive
                         ? "opacity-40 border-slate-700 bg-slate-900"
@@ -783,36 +1000,30 @@ export default function CoupGame({
                   `}
                 >
                   <div className="flex items-center gap-2">
-                    {pMeta?.avatar ? (
-                      <img
-                        src={pMeta.avatar}
-                        alt={pMeta.name}
-                        className="w-8 h-8 rounded-full border border-slate-600 object-cover"
-                      />
-                    ) : (
-                      <UserCircle2 className="w-8 h-8 text-slate-500" />
-                    )}
+                    <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-100 border border-slate-500">
+                      {initials}
+                    </div>
                     <div className="flex flex-col">
-                      <span className="text-sm font-semibold">
+                      <span className="text-xs font-semibold">
                         {pMeta?.name ?? "Player"}
                       </span>
-                      <span className="text-[11px] text-slate-400">
+                      <span className="text-[10px] text-slate-400">
                         {ps.alive ? "Alive" : "Eliminated"}
                       </span>
                     </div>
                     {isTurn && (
-                      <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-purple-600/30 text-purple-200">
+                      <span className="ml-auto text-[9px] px-2 py-0.5 rounded-full bg-purple-600/30 text-purple-200">
                         TURN
                       </span>
                     )}
                     {isMe && (
-                      <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-600/30 text-blue-200">
+                      <span className="ml-1 text-[9px] px-2 py-0.5 rounded-full bg-blue-600/30 text-blue-200">
                         YOU
                       </span>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs">
+                  <div className="flex items-center gap-2 text-[10px]">
                     <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-slate-800 border border-slate-700">
                       <Coins className="w-3 h-3" />
                       <span>{ps.coins}</span>
@@ -834,53 +1045,54 @@ export default function CoupGame({
           </div>
         </div>
 
-        <div className="w-full md:w-80 space-y-3">
+        {/* Right: roles panel + log */}
+        <div className="w-full lg:w-80 space-y-2">
           <div className="bg-slate-950/80 border border-slate-700 rounded-2xl p-3 space-y-2">
-            <p className="text-xs font-semibold text-slate-300 flex items-center gap-1">
-              <Info className="w-4 h-4 text-purple-400" /> Roles & Abilities
-            </p>
-            <div className="grid grid-cols-1 gap-2 text-xs">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-slate-300 flex items-center gap-1">
+                <Info className="w-3 h-3 text-purple-400" /> Roles & Abilities
+              </p>
+              <p className="text-[10px] text-slate-500 sm:hidden">
+                (Scroll ↓)
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 text-xs max-h-40 overflow-y-auto">
               {renderRoleCard(
                 "💼",
                 "Chancellor",
-                "chancellor",
                 "Tax: Take 3 coins.",
                 "Blocks Foreign Aid."
               )}
               {renderRoleCard(
                 "🗡",
                 "Shadow",
-                "shadow",
                 "Assassinate: Pay 3 coins to remove 1 influence.",
                 "Blocked by Protector."
               )}
               {renderRoleCard(
                 "🕵️",
                 "Agent",
-                "agent",
                 "Steal: Take up to 2 coins from a player.",
                 "Blocked by Agent or Diplomat."
               )}
               {renderRoleCard(
                 "🎭",
                 "Diplomat",
-                "diplomat",
                 "Exchange: Refresh your hidden cards.",
-                "Blocks Steal."
+                "At most 1 new card each use."
               )}
               {renderRoleCard(
                 "🛡",
                 "Protector",
-                "protector",
                 "No action.",
                 "Blocks Assassinate."
               )}
             </div>
           </div>
 
-          <div className="bg-slate-950/80 border border-slate-700 rounded-2xl p-3 space-y-2 max-h-60 overflow-y-auto">
-            <p className="text-xs font-semibold text-slate-300 flex items-center gap-1">
-              <Swords className="w-4 h-4 text-red-400" /> Action Log
+          <div className="bg-slate-950/80 border border-slate-700 rounded-2xl p-3 space-y-1 max-h-52 overflow-y-auto">
+            <p className="text-[11px] font-semibold text-slate-300 flex items-center gap-1">
+              <Swords className="w-3 h-3 text-red-400" /> Action Log
             </p>
             {gameState.activityLog
               .slice()
@@ -888,7 +1100,7 @@ export default function CoupGame({
               .map((entry) => (
                 <p
                   key={entry.id}
-                  className="text-[11px] text-slate-400 border-b border-slate-800/80 pb-1 mb-1 last:border-none last:pb-0 last:mb-0"
+                  className="text-[10px] text-slate-400 border-b border-slate-800/80 pb-1 mb-1 last:border-none last:pb-0 last:mb-0"
                 >
                   {entry.text}
                 </p>
@@ -897,10 +1109,12 @@ export default function CoupGame({
         </div>
       </div>
 
-      <div className="mt-auto p-4 border-t border-slate-800 bg-slate-950/90">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-          <div className="flex flex-col gap-2">
-            <p className="text-xs text-slate-400 mb-1">Your Influence</p>
+      {/* Bottom: your cards + action bar */}
+      <div className="mt-auto p-3 border-t border-slate-800 bg-slate-950/95">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
+          {/* Your influence */}
+          <div className="flex flex-col gap-1">
+            <p className="text-[11px] text-slate-400 mb-1">Your Influence</p>
             <div className="flex gap-2 flex-wrap">
               {myState.influences.map((inf) =>
                 renderInfluenceCard(
@@ -914,52 +1128,54 @@ export default function CoupGame({
 
             {gameState.phase === "choose_influence_to_lose" &&
               gameState.revealInfo?.loserPlayerId === myId && (
-                <p className="text-[11px] text-red-400 flex items-center gap-1 mt-1">
+                <p className="text-[10px] text-red-400 flex items-center gap-1 mt-1">
                   <AlertTriangle className="w-3 h-3" />
                   Choose which card to sacrifice.
                 </p>
               )}
           </div>
 
+          {/* Actions */}
           <div className="flex-1 flex flex-col gap-2 items-stretch">
-            <div className="flex flex-wrap gap-2 justify-end text-xs">
+            {/* Main actions */}
+            <div className="flex flex-wrap gap-2 justify-end text-[11px] md:text-xs">
               {isMyTurn && myState.alive && (
                 <>
                   <button
                     onClick={() => startAction("income")}
-                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 flex items-center gap-1"
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 flex items-center gap-1"
                   >
                     <Coins className="w-3 h-3" />
                     <span>Income (+1)</span>
                   </button>
                   <button
                     onClick={() => startAction("foreign_aid")}
-                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600"
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600"
                   >
                     Foreign Aid (+2)
                   </button>
                   <button
                     onClick={() => startAction("tax")}
-                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-purple-500/70"
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-purple-500/70"
                   >
-                    💼 Tax (3 coins)
+                    💼 Tax (3)
                   </button>
                   <button
                     disabled={myState.coins < 3}
                     onClick={() => setPendingTargetAction("assassinate")}
-                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-red-500/70 disabled:opacity-40"
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-red-500/70 disabled:opacity-40"
                   >
                     🗡 Assassinate (3)
                   </button>
                   <button
                     onClick={() => setPendingTargetAction("steal")}
-                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-yellow-500/70"
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-yellow-500/70"
                   >
                     🕵️ Steal (2)
                   </button>
                   <button
                     onClick={() => startAction("exchange")}
-                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-blue-500/70"
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-blue-500/70 flex items-center gap-1"
                   >
                     <Shuffle className="w-3 h-3" />
                     <span>Exchange</span>
@@ -967,7 +1183,7 @@ export default function CoupGame({
                   <button
                     disabled={myState.coins < 7}
                     onClick={() => setPendingTargetAction("coup")}
-                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-pink-500/70 disabled:opacity-40"
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-pink-500/70 disabled:opacity-40"
                   >
                     💣 Coup (7)
                   </button>
@@ -979,18 +1195,18 @@ export default function CoupGame({
                   {canChallengeAction() && (
                     <button
                       onClick={handleChallengeAction}
-                      className="px-3 py-2 rounded-xl bg-red-900/80 hover:bg-red-800 border border-red-500/80 flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-xl bg-red-900/80 hover:bg-red-800 border border-red-500/80 flex items-center gap-1"
                     >
                       <AlertTriangle className="w-3 h-3" />
                       <span>Challenge Action</span>
                     </button>
                   )}
                   {canBlock() && (
-                    <div className="flex gap-1 flex-wrap">
+                    <div className="flex flex-wrap gap-1 justify-end">
                       {gameState.pendingAction?.type === "foreign_aid" && (
                         <button
                           onClick={() => handleBlock("chancellor")}
-                          className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-purple-500/80"
+                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-purple-500/80"
                         >
                           Block as 💼 Chancellor
                         </button>
@@ -998,7 +1214,7 @@ export default function CoupGame({
                       {gameState.pendingAction?.type === "assassinate" && (
                         <button
                           onClick={() => handleBlock("protector")}
-                          className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-green-500/80"
+                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-green-500/80"
                         >
                           Block as 🛡 Protector
                         </button>
@@ -1007,13 +1223,13 @@ export default function CoupGame({
                         <>
                           <button
                             onClick={() => handleBlock("agent")}
-                            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-yellow-500/80"
+                            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-yellow-500/80"
                           >
                             Block as 🕵️ Agent
                           </button>
                           <button
                             onClick={() => handleBlock("diplomat")}
-                            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-blue-500/80"
+                            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-blue-500/80"
                           >
                             Block as 🎭 Diplomat
                           </button>
@@ -1024,7 +1240,7 @@ export default function CoupGame({
                   {canChallengeBlock() && (
                     <button
                       onClick={handleChallengeBlock}
-                      className="px-3 py-2 rounded-xl bg-red-900/80 hover:bg-red-800 border border-red-500/80 flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-xl bg-red-900/80 hover:bg-red-800 border border-red-500/80 flex items-center gap-1"
                     >
                       <AlertTriangle className="w-3 h-3" />
                       <span>Challenge Block</span>
@@ -1034,8 +1250,9 @@ export default function CoupGame({
               )}
             </div>
 
+            {/* Host helper buttons */}
             {isHost && (
-              <div className="flex flex-wrap gap-2 justify-end text-[11px] mt-1 text-slate-300">
+              <div className="flex flex-wrap gap-2 justify-end text-[10px] mt-1 text-slate-300">
                 {gameState.phase === "pending_challenge_on_action" && (
                   <button
                     onClick={handleHostNoChallengeOnAction}
@@ -1064,11 +1281,16 @@ export default function CoupGame({
             )}
 
             {pendingTargetAction && isMyTurn && (
-              <p className="text-[11px] text-yellow-300 text-right flex items-center gap-1 justify-end mt-1">
+              <p className="text-[10px] text-yellow-300 text-right flex items-center gap-1 justify-end mt-1">
                 <Swords className="w-3 h-3" />
                 Select a target player on the table.
               </p>
             )}
+
+            {/* Phase hint for small screens */}
+            <div className="sm:hidden text-[10px] text-slate-400 text-right mt-1">
+              {phaseHint}
+            </div>
           </div>
         </div>
       </div>
