@@ -164,6 +164,7 @@ function App() {
         break;
       case 'cham':
         gameState = initChameleonGame(playerIds);
+        break;
       default:
         return;
     }
