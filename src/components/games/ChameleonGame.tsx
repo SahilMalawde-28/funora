@@ -653,7 +653,10 @@ export default function ChamaleonGame({
             <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl text-left">
               <p className="font-bold text-gray-600 mb-2">Chameleon’s Guess</p>
               <p className="text-sm">
-                Secret word: <b>{gameState.targetWord}</b>
+                Secret word: 
+                <b>
+                  {isImposter && !roundWinner ? "Hidden" : gameState.targetWord}
+                </b>
               </p>
               <p className="text-sm">
                 Guess: <b>{gameState.imposterGuess ?? "No guess"}</b>
