@@ -63,6 +63,13 @@ export const GAMES = [
     description: 'Go with the crowd or you will end up lost.',
     emoji: '🐮',
     minPlayers: 2
+  },
+  {
+    id: 'cham',
+    name: 'Chamaleon',
+    description: 'Blend with others',
+    emoji: '🦎',
+    minPlayers: 3
   }
 ];
 

@@ -13,6 +13,7 @@ import ChainGame from './components/games/ChainGame';
 import BoilingGame from './components/games/BoilingGame';
 import MemoryGame from './components/games/MemoryGame';
 import HerdGame from './components/games/HerdGame';
+import ChamaleonGame from './components/games/ChamaleonGame';
 
 
 function App() {
