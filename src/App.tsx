@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, Room, Player } from './lib/supabase';
 import { createRoom, joinRoom, getPlayers, updateRoomState } from './lib/roomService';
-import { initImposterGame, initBluffGame, initTeamGame, initWavelengthGame, initWordGuessGame, initChainGame, initBoilingWaterGame,initUnoGame,initMemoryGameState,initHerdGame } from './lib/gameLogic';
+import { initImposterGame, initBluffGame, initTeamGame, initWavelengthGame, initWordGuessGame, initChainGame, initBoilingWaterGame,initUnoGame,initMemoryGameState,initHerdGame,initChamaleonGame } from './lib/gameLogic';
 import Home from './components/Home';
 import Lobby from './components/Lobby';
 import ImposterGame from './components/games/ImposterGame';
