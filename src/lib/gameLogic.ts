@@ -3362,6 +3362,8 @@ const shuffleC = <T,>(arr: T[]): T[] => {
 // ======================================================
 // 🚀 INITIALIZER (Like your initWordGuessGame)
 // ======================================================
+// assuming you already have CHAM_TOPICS and shuffleC<T>(arr: T[]): T[]
+
 export const initChameleonGame = (playerIds: string[]): ChameleonGameState => {
   if (playerIds.length < 3) {
     throw new Error("Need at least 3 players for Chameleon.");
@@ -3371,10 +3373,10 @@ export const initChameleonGame = (playerIds: string[]): ChameleonGameState => {
   const topic = topicNames[Math.floor(Math.random() * topicNames.length)];
   const pool = CHAM_TOPICS[topic];
 
-  const gridWords = shuffle(pool).slice(0, 16);
+  const gridWords = shuffleC(pool).slice(0, 16);
   const targetWord = gridWords[Math.floor(Math.random() * 16)];
 
-  const shuffled = shuffle(playerIds);
+  const shuffled = shuffleC(playerIds);
   const imposterId = shuffled[0];
 
   const assignments: Record<string, ChameleonRole> = {};
@@ -3389,9 +3391,13 @@ export const initChameleonGame = (playerIds: string[]): ChameleonGameState => {
     targetWord,
     assignments,
     hints: {},
-    hintOrder: shuffle(playerIds),
+    hintOrder: shuffleC(playerIds),
     currentHintIndex: 0,
     votes: {},
     imposterGuess: null,
+
+    activePlayers: [...playerIds], // 🔥 everyone alive initially
+    round: 1,                      // 🔥 start at round 1
   };
 };
+
