@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Room, Player } from "../../lib/supabase";
 import {
   CoupGameState,
-  CoupPlayerState,
   CoupRole,
   CoupInfluence,
   shuffleC,
@@ -27,6 +26,9 @@ interface CoupGameProps {
   onEndGame: () => void;
 }
 
+// Helper to track special chain after someone loses a card
+type AfterLoseFlag = "continue_action" | "block_stands";
+
 export default function CoupGame({
   room,
   players,
@@ -36,30 +38,32 @@ export default function CoupGame({
   onEndGame,
 }: CoupGameProps) {
   const myId = currentPlayer.player_id;
+  const myState = gameState.players[myId];
   const isHost = room.host_id === myId;
 
   const [pendingTargetAction, setPendingTargetAction] = useState<
     null | "assassinate" | "steal" | "coup"
   >(null);
 
-  // Local Diplomat exchange state (ONLY UI state, final effect goes into gameState)
+  // Diplomat modal
   const [exchangeOptions, setExchangeOptions] = useState<CoupInfluence[] | null>(
     null
   );
   const [exchangeSelectedIds, setExchangeSelectedIds] = useState<string[]>([]);
 
-  const myState = gameState.players[myId];
-  const currentTurnPlayerId = gameState.turnOrder[gameState.currentTurnIndex];
-  const currentTurnPlayerState = gameState.players[currentTurnPlayerId];
-  const isMyTurn =
-    gameState.phase === "choose_action" && currentTurnPlayerId === myId;
+  // Click lock for smooth UX
+  const [clickLocked, setClickLocked] = useState(false);
+  const lockClick = () => {
+    setClickLocked(true);
+    setTimeout(() => setClickLocked(false), 450);
+  };
 
   const findPlayer = (id: string) =>
     players.find((p) => p.player_id === id) || null;
 
-  const alivePlayers = gameState.turnOrder
-    .map((pid) => gameState.players[pid])
-    .filter((p) => p.alive);
+  const currentTurnPlayerId = gameState.turnOrder[gameState.currentTurnIndex];
+  const isMyTurn =
+    gameState.phase === "choose_action" && currentTurnPlayerId === myId;
 
   const addLog = (text: string) => {
     const log: CoupGameState["activityLog"] = [
@@ -118,6 +122,7 @@ export default function CoupGame({
     };
   };
 
+  // Basic loseInfluence (used when we aren’t in fancy chain flow)
   const loseInfluence = (
     state: CoupGameState,
     playerId: string,
@@ -129,7 +134,6 @@ export default function CoupGame({
     const newInfluences = player.influences.map((inf) =>
       inf.id === influenceId ? { ...inf, revealed: true } : inf
     );
-
     const stillAlive = newInfluences.some((inf) => !inf.revealed);
 
     const newPlayers = {
@@ -157,6 +161,7 @@ export default function CoupGame({
     return newState;
   };
 
+  // Apply final effect of an action once all challenges/blocks resolved
   const applyActionEffect = (state: CoupGameState): CoupGameState => {
     const action = state.pendingAction;
     if (!action) return state;
@@ -226,9 +231,9 @@ export default function CoupGame({
           ...s,
           phase: "choose_influence_to_lose",
           revealInfo: {
-            ...s.revealInfo,
+            ...(s.revealInfo as any),
             loserPlayerId: action.targetId,
-          },
+          } as any,
         };
         return s;
       }
@@ -248,17 +253,15 @@ export default function CoupGame({
           ...s,
           phase: "choose_influence_to_lose",
           revealInfo: {
-            ...s.revealInfo,
+            ...(s.revealInfo as any),
             loserPlayerId: action.targetId,
-          },
+          } as any,
         };
         return s;
       }
     }
 
-    // NOTE: Diplomat (exchange) is handled separately via phase=exchange_cards and the modal.
-    // We DO NOT auto-apply exchange here anymore.
-
+    // Diplomat: actual exchange is done via modal later
     s.pendingAction = null;
     s.pendingBlock = null;
     s.challengeWindow = null;
@@ -270,17 +273,23 @@ export default function CoupGame({
     return s;
   };
 
+  // === START ACTIONS ===
+
   const startAction = (
-    type: CoupGameState["pendingAction"] extends infer _T
-      ? _T extends { type: infer U }
-        ? U
-        : never
-      : never,
+    type:
+      | "income"
+      | "foreign_aid"
+      | "tax"
+      | "assassinate"
+      | "steal"
+      | "exchange"
+      | "coup",
     targetId?: string
   ) => {
-    if (!isMyTurn || !myState?.alive) return;
+    if (!isMyTurn || !myState?.alive || clickLocked) return;
 
     let s: CoupGameState = { ...gameState };
+    lockClick();
 
     if (type === "income") {
       s.pendingAction = { actorId: myId, type };
@@ -316,8 +325,7 @@ export default function CoupGame({
     }
 
     if (type === "assassinate") {
-      if (!targetId) return;
-      if (myState.coins < 3) return;
+      if (!targetId || myState.coins < 3) return;
       s = applyCoinsChange(s, myId, -3);
       s.pendingAction = {
         actorId: myId,
@@ -368,8 +376,7 @@ export default function CoupGame({
     }
 
     if (type === "coup") {
-      if (!targetId) return;
-      if (myState.coins < 7) return;
+      if (!targetId || myState.coins < 7) return;
       s = applyCoinsChange(s, myId, -7);
       s.pendingAction = {
         actorId: myId,
@@ -388,45 +395,43 @@ export default function CoupGame({
   };
 
   const handlePlayerCardClick = (pid: string) => {
-    if (!isMyTurn || !pendingTargetAction) return;
+    if (!isMyTurn || !pendingTargetAction || clickLocked) return;
     if (pid === myId) return;
-    startAction(pendingTargetAction as any, pid);
+    startAction(pendingTargetAction, pid);
     setPendingTargetAction(null);
   };
 
+  // === CHALLENGE / BLOCK PERMISSIONS ===
+
   const canChallengeAction = () => {
-    if (!gameState.pendingAction) return false;
+    const act = gameState.pendingAction;
+    if (!act) return false;
     if (gameState.phase !== "pending_challenge_on_action") return false;
     if (!myState?.alive) return false;
-    if (myId === gameState.pendingAction.actorId) return false;
+    if (myId === act.actorId) return false;
     return true;
   };
 
   const canBlock = () => {
-    if (!gameState.pendingAction) return false;
+    const act = gameState.pendingAction;
+    if (!act) return false;
     if (gameState.phase !== "pending_block") return false;
     if (!myState?.alive) return false;
-
-    const act = gameState.pendingAction;
-    if (act.type === "foreign_aid") {
-      return myState.alive;
-    }
-    if (act.type === "assassinate" && act.targetId === myId) {
-      return myState.alive;
-    }
-    if (act.type === "steal" && act.targetId === myId) {
-      return myState.alive;
-    }
-    return false;
+    // Target-only (except Foreign Aid where anyone can block)
+    if (act.type === "foreign_aid") return true;
+    return act.targetId === myId;
   };
 
   const canChallengeBlock = () => {
-    if (!gameState.pendingBlock) return false;
+    const pb = gameState.pendingBlock;
+    if (!pb) return false;
     if (gameState.phase !== "pending_challenge_on_block") return false;
     if (!myState?.alive) return false;
-    if (myId === gameState.pendingBlock.blockerId) return false;
+    if (myId === pb.blockerId) return false;
     return true;
   };
+
+  // === CHALLENGE RESOLUTION (with truthful card replacement) ===
 
   const resolveChallenge = (
     truthful: boolean,
@@ -436,7 +441,13 @@ export default function CoupGame({
   ) => {
     let s: CoupGameState = { ...gameState };
 
+    const isActionChallenge =
+      gameState.phase === "pending_challenge_on_action";
+    const isBlockChallenge =
+      gameState.phase === "pending_challenge_on_block";
+
     if (truthful) {
+      // ✅ Challenged player was telling the truth
       addLog(
         `✅ Challenge failed: ${
           findPlayer(challengedId)?.name ?? "?"
@@ -444,14 +455,60 @@ export default function CoupGame({
           findPlayer(challengerId)?.name ?? "?"
         } loses a card.`
       );
+
+      // 🃏 Replace the revealed truthful card with a new one from the deck
+      const player = s.players[challengedId];
+      if (player) {
+        // Choose a hidden card of that role
+        const hiddenOfRole = player.influences.filter(
+          (inf) => !inf.revealed && inf.role === role
+        );
+        const cardToReplace = hiddenOfRole[0];
+
+        if (cardToReplace && s.deck.length > 0) {
+          const remainingInfluences = player.influences.filter(
+            (inf) => inf.id !== cardToReplace.id
+          );
+
+          // Draw top card from deck
+          const newCard = s.deck[s.deck.length - 1];
+          let newDeck = s.deck.slice(0, -1);
+
+          const updatedInfluences: CoupInfluence[] = [
+            ...remainingInfluences,
+            { ...newCard, revealed: false },
+          ];
+
+          // Put revealed card at bottom of deck (face-down)
+          newDeck.unshift({ ...cardToReplace, revealed: false });
+
+          s.players = {
+            ...s.players,
+            [challengedId]: {
+              ...player,
+              influences: updatedInfluences,
+            },
+          };
+          s.deck = newDeck;
+        }
+      }
+
+      const afterLose: AfterLoseFlag | undefined = isActionChallenge
+        ? "continue_action"
+        : isBlockChallenge
+        ? "block_stands"
+        : undefined;
+
       s.phase = "choose_influence_to_lose";
       s.revealInfo = {
         revealedPlayerId: challengedId,
         revealedRole: role,
         loserPlayerId: challengerId,
-      };
+        afterLose,
+      } as any;
       s.challengeWindow = null;
     } else {
+      // ❌ Liar
       addLog(
         `❌ Bluff caught: ${
           findPlayer(challengedId)?.name ?? "?"
@@ -462,7 +519,7 @@ export default function CoupGame({
         revealedPlayerId: challengedId,
         revealedRole: role,
         loserPlayerId: challengedId,
-      };
+      } as any;
       s.challengeWindow = null;
       s.pendingAction = null;
       s.pendingBlock = null;
@@ -473,7 +530,9 @@ export default function CoupGame({
 
   const handleChallengeAction = () => {
     const act = gameState.pendingAction;
-    if (!canChallengeAction() || !act || !act.claimedRole) return;
+    if (!canChallengeAction() || !act || !act.claimedRole || clickLocked)
+      return;
+    lockClick();
 
     const actorState = gameState.players[act.actorId];
     const hasRole = actorState.influences.some(
@@ -484,7 +543,8 @@ export default function CoupGame({
 
   const handleChallengeBlock = () => {
     const pb = gameState.pendingBlock;
-    if (!canChallengeBlock() || !pb) return;
+    if (!canChallengeBlock() || !pb || clickLocked) return;
+    lockClick();
 
     const blockerState = gameState.players[pb.blockerId];
     const hasRole = blockerState.influences.some(
@@ -493,9 +553,13 @@ export default function CoupGame({
     resolveChallenge(hasRole, pb.blockerId, pb.role, myId);
   };
 
+  // === HOST “NO ONE CHALLENGED/BLOCKED” HELPERS ===
+
   const handleHostNoChallengeOnAction = () => {
-    if (!isHost) return;
+    if (!isHost || clickLocked) return;
     if (gameState.phase !== "pending_challenge_on_action") return;
+    lockClick();
+
     let s: CoupGameState = { ...gameState };
     const act = s.pendingAction;
     if (!act) return;
@@ -503,16 +567,15 @@ export default function CoupGame({
     if (act.type === "tax") {
       s = applyActionEffect(s);
     } else if (act.type === "exchange") {
-      // Diplomat: move to exchange_cards phase (ONLY for actor)
       s.phase = "exchange_cards";
       addLog(
-        `🎭 ${
-          findPlayer(act.actorId)?.name ?? "?"
-        } is exchanging influence cards...`
+        `🎭 ${findPlayer(act.actorId)?.name ?? "?"} is exchanging cards...`
       );
     } else if (act.type === "assassinate" || act.type === "steal") {
       s.phase = "pending_block";
       addLog(`➡ Waiting for possible block...`);
+    } else {
+      s = applyActionEffect(s);
     }
 
     onUpdateState(s);
@@ -520,7 +583,7 @@ export default function CoupGame({
 
   const handleBlock = (role: CoupRole) => {
     const act = gameState.pendingAction;
-    if (!canBlock() || !act) return;
+    if (!canBlock() || !act || clickLocked) return;
 
     if (act.type === "foreign_aid" && role !== "chancellor") return;
     if (act.type === "assassinate" && role !== "protector") return;
@@ -531,6 +594,7 @@ export default function CoupGame({
     )
       return;
 
+    lockClick();
     let s: CoupGameState = { ...gameState };
     s.pendingBlock = {
       blockerId: myId,
@@ -546,21 +610,30 @@ export default function CoupGame({
     onUpdateState(s);
   };
 
+  const handleSkipBlock = () => {
+    const act = gameState.pendingAction;
+    if (!canBlock() || !act || clickLocked) return;
+    lockClick();
+    let s = applyActionEffect({ ...gameState });
+    onUpdateState(s);
+  };
+
   const handleHostNoBlock = () => {
-    if (!isHost) return;
+    if (!isHost || clickLocked) return;
     if (gameState.phase !== "pending_block") return;
+    lockClick();
     let s = applyActionEffect({ ...gameState });
     onUpdateState(s);
   };
 
   const handleHostNoChallengeOnBlock = () => {
-    if (!isHost) return;
+    if (!isHost || clickLocked) return;
     if (gameState.phase !== "pending_challenge_on_block") return;
+    lockClick();
 
-    const pb = gameState.pendingBlock;
     let s: CoupGameState = { ...gameState };
-
-    if (!pb || !gameState.pendingAction) {
+    const pb = s.pendingBlock;
+    if (!pb || !s.pendingAction) {
       s.pendingBlock = null;
       s.phase = "choose_action";
       s.currentTurnIndex = getNextTurnIndex(s);
@@ -573,53 +646,94 @@ export default function CoupGame({
       addLog(`💼 Chancellor successfully blocks Foreign Aid.`);
       s.pendingAction = null;
       s.pendingBlock = null;
-      s.phase = "choose_action";
-      s.currentTurnIndex = getNextTurnIndex(s);
-      s = checkGameOver(s);
-      onUpdateState(s);
-      return;
-    }
-
-    if (pb.blockingAction === "assassinate") {
+    } else if (pb.blockingAction === "assassinate") {
       addLog(`🛡 Protector blocks assassination.`);
       s.pendingAction = null;
       s.pendingBlock = null;
-      s.phase = "choose_action";
-      s.currentTurnIndex = getNextTurnIndex(s);
-      s = checkGameOver(s);
-      onUpdateState(s);
-      return;
-    }
-
-    if (pb.blockingAction === "steal") {
+    } else if (pb.blockingAction === "steal") {
       addLog(`🛡 Steal blocked by ${pb.role.toUpperCase()}.`);
       s.pendingAction = null;
       s.pendingBlock = null;
-      s.phase = "choose_action";
-      s.currentTurnIndex = getNextTurnIndex(s);
-      s = checkGameOver(s);
-      onUpdateState(s);
-      return;
     }
+
+    s.phase = "choose_action";
+    s.currentTurnIndex = getNextTurnIndex(s);
+    s = checkGameOver(s);
+    onUpdateState(s);
   };
+
+  // === LOSING INFLUENCE WITH SPECIAL AFTER-LOSE FLOW ===
 
   const handleChooseInfluenceToLose = (influenceId: string) => {
     if (gameState.phase !== "choose_influence_to_lose") return;
     const loserId = gameState.revealInfo?.loserPlayerId;
-    if (!loserId || loserId !== myId) return;
+    if (!loserId || loserId !== myId || clickLocked) return;
+    lockClick();
 
-    const newState = loseInfluence(gameState, loserId, influenceId);
-    onUpdateState(newState);
+    const afterLose = (gameState.revealInfo as any)
+      ?.afterLose as AfterLoseFlag | undefined;
+
+    if (!afterLose) {
+      const newS = loseInfluence(gameState, loserId, influenceId);
+      onUpdateState(newS);
+      return;
+    }
+
+    let s: CoupGameState = { ...gameState };
+    const pl = s.players[loserId];
+    const newInf = pl.influences.map((inf) =>
+      inf.id === influenceId ? { ...inf, revealed: true } : inf
+    );
+    const alive = newInf.some((inf) => !inf.revealed);
+
+    s.players = {
+      ...s.players,
+      [loserId]: {
+        ...pl,
+        influences: newInf,
+        alive,
+      },
+    };
+    s.revealInfo = null;
+
+    if (afterLose === "continue_action") {
+      const act = s.pendingAction;
+      if (!act) {
+        onUpdateState(s);
+        return;
+      }
+
+      if (act.type === "assassinate" || act.type === "steal") {
+        s.phase = "pending_block";
+        addLog(`➡ Waiting for possible block...`);
+        onUpdateState(s);
+        return;
+      }
+
+      s = applyActionEffect(s);
+      onUpdateState(s);
+      return;
+    }
+
+    if (afterLose === "block_stands") {
+      s.pendingAction = null;
+      s.pendingBlock = null;
+      s.phase = "choose_action";
+      s.currentTurnIndex = getNextTurnIndex(s);
+      s = checkGameOver(s);
+      onUpdateState(s);
+      return;
+    }
   };
 
-  // ---------------- Diplomat Exchange UI & Logic ----------------
+  // === DIPLOMAT EXCHANGE ===
 
-  // When we enter exchange_cards phase and we are the actor, compute options.
   useEffect(() => {
+    const act = gameState.pendingAction;
     if (
       gameState.phase === "exchange_cards" &&
-      gameState.pendingAction?.type === "exchange" &&
-      gameState.pendingAction.actorId === myId &&
+      act?.type === "exchange" &&
+      act.actorId === myId &&
       myState?.alive
     ) {
       if (!exchangeOptions) {
@@ -627,13 +741,11 @@ export default function CoupGame({
         const alive = me.influences.filter((i) => !i.revealed);
         const deck = gameState.deck;
         const drawn: CoupInfluence[] = [];
-        // Draw top 2 from deck (end of array)
         for (let i = 0; i < 2 && deck.length - 1 - i >= 0; i++) {
           drawn.push(deck[deck.length - 1 - i]);
         }
         const options = [...alive, ...drawn];
         setExchangeOptions(options);
-        // Start with your current card if only 1 (makes sense)
         if (alive.length === 1) {
           setExchangeSelectedIds([alive[0].id]);
         } else {
@@ -660,32 +772,25 @@ export default function CoupGame({
     const me = gameState.players[myId];
     const alive = me.influences.filter((i) => !i.revealed);
     const aliveIds = alive.map((a) => a.id);
-    const options = exchangeOptions;
-    const drawn = options.filter((opt) => !aliveIds.includes(opt.id));
+    const drawn = exchangeOptions.filter((opt) => !aliveIds.includes(opt.id));
     const drawnIds = drawn.map((d) => d.id);
 
     if (alive.length === 1) {
-      // Single influence case: choose exactly 1 card
       setExchangeSelectedIds([id]);
       return;
     }
 
-    // 2+ alive influences: must end with exactly alive.length selections,
-    // and at most ONE of them can be a new card (from drawn)
     let next = [...exchangeSelectedIds];
     if (next.includes(id)) {
       next = next.filter((x) => x !== id);
     } else {
-      // add if we don't exceed alive.length
       if (next.length >= alive.length) return;
-      // if this is a drawn card, ensure we don't already have a drawn selected
       const isNew = drawnIds.includes(id);
       if (isNew) {
         const newCount = next.filter((selId) =>
           drawnIds.includes(selId)
         ).length;
         if (newCount >= 1) {
-          // already 1 new selected, can't take second new
           return;
         }
       }
@@ -695,13 +800,13 @@ export default function CoupGame({
   };
 
   const handleConfirmExchange = () => {
-    if (!isExchangeActor || !exchangeOptions) return;
+    if (!isExchangeActor || !exchangeOptions || clickLocked) return;
+    lockClick();
+
     const me = gameState.players[myId];
     const alive = me.influences.filter((i) => !i.revealed);
     const revealed = me.influences.filter((i) => i.revealed);
     const aliveIds = alive.map((a) => a.id);
-
-    // figure out which in options are newly drawn
     const drawn = exchangeOptions.filter((opt) => !aliveIds.includes(opt.id));
     const drawnIds = drawn.map((d) => d.id);
 
@@ -712,21 +817,16 @@ export default function CoupGame({
       const newCount = exchangeSelectedIds.filter((id) =>
         drawnIds.includes(id)
       ).length;
-      if (newCount > 1) {
-        // violating rule: only 1 new card max
-        return;
-      }
+      if (newCount > 1) return;
     }
 
-    // Build new alive influences
-    const selected: CoupInfluence[] = exchangeOptions.filter((opt) =>
+    const selected = exchangeOptions.filter((opt) =>
       exchangeSelectedIds.includes(opt.id)
     );
-    const notSelected: CoupInfluence[] = exchangeOptions.filter(
+    const notSelected = exchangeOptions.filter(
       (opt) => !exchangeSelectedIds.includes(opt.id)
     );
 
-    // Remove drawn from deck, then add back notSelected (old+new) and shuffle
     let baseDeck = gameState.deck.filter(
       (card) => !drawnIds.includes(card.id)
     );
@@ -761,12 +861,11 @@ export default function CoupGame({
     );
     onUpdateState(s);
 
-    // Clean local modal state
     setExchangeOptions(null);
     setExchangeSelectedIds([]);
   };
 
-  // ---------------- UI helpers ----------------
+  // === UI HELPERS ===
 
   if (!myState) {
     return (
@@ -851,6 +950,43 @@ export default function CoupGame({
     return "";
   })();
 
+  const actionBannerText = (() => {
+    const act = gameState.pendingAction;
+    const pb = gameState.pendingBlock;
+
+    if (gameState.phase === "pending_challenge_on_action" && act) {
+      const n = findPlayer(act.actorId)?.name ?? "Someone";
+      if (act.type === "tax") return `${n} claims 💼 Chancellor to take 3 coins.`;
+      if (act.type === "assassinate" && act.targetId)
+        return `${n} claims 🗡 Shadow to assassinate ${
+          findPlayer(act.targetId)?.name ?? "someone"
+        }.`;
+      if (act.type === "steal" && act.targetId)
+        return `${n} claims 🕵️ Agent to steal from ${
+          findPlayer(act.targetId)?.name ?? "someone"
+        }.`;
+      if (act.type === "exchange")
+        return `${n} claims 🎭 Diplomat to exchange cards.`;
+    }
+
+    if (gameState.phase === "pending_block" && act) {
+      const n = findPlayer(act.actorId)?.name ?? "Someone";
+      if (act.type === "foreign_aid")
+        return `${n} is taking Foreign Aid. Chancellor can block.`;
+      if (act.type === "assassinate" && act.targetId)
+        return `${n}'s assassination can be blocked by Protector.`;
+      if (act.type === "steal" && act.targetId)
+        return `${n}'s steal can be blocked by Agent/Diplomat.`;
+    }
+
+    if (gameState.phase === "pending_challenge_on_block" && pb) {
+      const n = findPlayer(pb.blockerId)?.name ?? "Someone";
+      return `${n} is blocking as ${pb.role.toUpperCase()}. Others may challenge.`;
+    }
+
+    return "";
+  })();
+
   if (gameState.phase === "game_over" && gameState.winnerId) {
     const winner = findPlayer(gameState.winnerId);
     return (
@@ -875,9 +1011,19 @@ export default function CoupGame({
     );
   }
 
+  const roleMapSmall: Record<CoupRole, { emoji: string; name: string }> = {
+    chancellor: { emoji: "💼", name: "Chancellor" },
+    shadow: { emoji: "🗡", name: "Shadow" },
+    agent: { emoji: "🕵️", name: "Agent" },
+    diplomat: { emoji: "🎭", name: "Diplomat" },
+    protector: { emoji: "🛡", name: "Protector" },
+  };
+
+  // === MAIN RENDER ===
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100 flex flex-col">
-      {/* Diplomat Exchange Modal */}
+      {/* Diplomat modal */}
       {isExchangeActor && exchangeOptions && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-3">
           <div className="max-w-md w-full bg-slate-900 rounded-3xl border border-slate-700 p-4 space-y-3">
@@ -889,7 +1035,7 @@ export default function CoupGame({
                 </p>
               </div>
               <span className="text-[10px] text-slate-400">
-                You can take at most 1 new role.
+                At most 1 new card.
               </span>
             </div>
             <p className="text-[11px] text-slate-300">
@@ -897,20 +1043,12 @@ export default function CoupGame({
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
               {exchangeOptions.map((opt) => {
-                const me = gameState.players[myId];
-                const alive = me.influences.filter((i) => !i.revealed);
+                const meP = gameState.players[myId];
+                const alive = meP.influences.filter((i) => !i.revealed);
                 const aliveIds = alive.map((a) => a.id);
                 const isNew = !aliveIds.includes(opt.id);
                 const isSel = exchangeSelectedIds.includes(opt.id);
-                const roleMap: Record<CoupRole, { emoji: string; name: string }> =
-                  {
-                    chancellor: { emoji: "💼", name: "Chancellor" },
-                    shadow: { emoji: "🗡", name: "Shadow" },
-                    agent: { emoji: "🕵️", name: "Agent" },
-                    diplomat: { emoji: "🎭", name: "Diplomat" },
-                    protector: { emoji: "🛡", name: "Protector" },
-                  };
-                const r = roleMap[opt.role];
+                const r = roleMapSmall[opt.role];
 
                 return (
                   <button
@@ -943,7 +1081,7 @@ export default function CoupGame({
         </div>
       )}
 
-      {/* Top section: title, turn info, players + roles/log */}
+      {/* Top content */}
       <div className="flex flex-col lg:flex-row gap-3 p-3 items-start">
         {/* Left: header + players */}
         <div className="flex-1 space-y-2">
@@ -959,6 +1097,12 @@ export default function CoupGame({
               <span>{phaseHint}</span>
             </div>
           </div>
+
+          {actionBannerText && (
+            <div className="mt-1 text-[11px] text-yellow-300 bg-yellow-500/10 border border-yellow-500/40 rounded-xl px-2 py-1">
+              {actionBannerText}
+            </div>
+          )}
 
           <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
             <Users className="w-4 h-4" />
@@ -1045,7 +1189,7 @@ export default function CoupGame({
           </div>
         </div>
 
-        {/* Right: roles panel + log */}
+        {/* Right: roles panel + rules + log */}
         <div className="w-full lg:w-80 space-y-2">
           <div className="bg-slate-950/80 border border-slate-700 rounded-2xl p-3 space-y-2">
             <div className="flex items-center justify-between">
@@ -1079,7 +1223,7 @@ export default function CoupGame({
                 "🎭",
                 "Diplomat",
                 "Exchange: Refresh your hidden cards.",
-                "At most 1 new card each use."
+                "At most 1 new card per exchange."
               )}
               {renderRoleCard(
                 "🛡",
@@ -1090,6 +1234,24 @@ export default function CoupGame({
             </div>
           </div>
 
+          {/* Simple rules */}
+          <div className="bg-slate-950/80 border border-slate-700 rounded-2xl p-3 space-y-1">
+            <p className="text-[11px] font-semibold text-slate-300 flex items-center gap-1">
+              <Info className="w-3 h-3 text-blue-400" /> How to Play
+            </p>
+            <ul className="text-[10px] text-slate-400 space-y-1">
+              <li>• Start with 2 hidden roles and 2 coins.</li>
+              <li>• On your turn, choose an action (Income, Tax, Steal, etc.).</li>
+              <li>• You can lie about your role to use stronger actions.</li>
+              <li>• Anyone can Challenge role claims.</li>
+              <li>• True claim: challenger loses a card, claimant swaps shown role.</li>
+              <li>• False claim: liar loses a card and action is cancelled.</li>
+              <li>• Assassinate & Coup force the target to lose influence.</li>
+              <li>• Lose all influence = you’re out. Last player alive wins.</li>
+            </ul>
+          </div>
+
+          {/* Log */}
           <div className="bg-slate-950/80 border border-slate-700 rounded-2xl p-3 space-y-1 max-h-52 overflow-y-auto">
             <p className="text-[11px] font-semibold text-slate-300 flex items-center gap-1">
               <Swords className="w-3 h-3 text-red-400" /> Action Log
@@ -1137,7 +1299,6 @@ export default function CoupGame({
 
           {/* Actions */}
           <div className="flex-1 flex flex-col gap-2 items-stretch">
-            {/* Main actions */}
             <div className="flex flex-wrap gap-2 justify-end text-[11px] md:text-xs">
               {isMyTurn && myState.alive && (
                 <>
@@ -1235,6 +1396,12 @@ export default function CoupGame({
                           </button>
                         </>
                       )}
+                      <button
+                        onClick={handleSkipBlock}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600"
+                      >
+                        Skip Block
+                      </button>
                     </div>
                   )}
                   {canChallengeBlock() && (
@@ -1250,7 +1417,7 @@ export default function CoupGame({
               )}
             </div>
 
-            {/* Host helper buttons */}
+            {/* Host helpers */}
             {isHost && (
               <div className="flex flex-wrap gap-2 justify-end text-[10px] mt-1 text-slate-300">
                 {gameState.phase === "pending_challenge_on_action" && (
@@ -1287,7 +1454,6 @@ export default function CoupGame({
               </p>
             )}
 
-            {/* Phase hint for small screens */}
             <div className="sm:hidden text-[10px] text-slate-400 text-right mt-1">
               {phaseHint}
             </div>
