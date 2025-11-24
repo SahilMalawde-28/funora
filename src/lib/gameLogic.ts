@@ -2711,54 +2711,76 @@ export const personalityHints: Record<string, string[]> = {
 // INIT WORD GUESS GAME STATE
 // ==========================
 
+export interface PlayerGridState {
+  grid: string[];
+  locked: boolean[];
+  lives: number;
+  powerups: string[];
+  hintIndex: number;
+}
+
+export interface WordGuessGameState {
+  phase: 'powerup' | 'placing' | 'reveal' | 'ended';
+  targetWord: string;
+  hints: string[];
+  round: number;
+  players: Record<string, PlayerGridState>;
+  unlockInterval: number;
+}
+
+const POWERUPS = [
+  "misguide",
+  "peek",
+  "hint",
+  "letter_drop",
+  "extra_life",
+  "op"
+];
+
 export const initWordGuessGame = (playerIds: string[]): WordGuessGameState => {
   const words = Object.keys(personalityHints);
-  const targetKey = words[randInt(words.length)];
-  const targetWord = targetKey; // keep same as key (no spaces in our list)
-  const allHints = personalityHints[targetKey] || [];
-  const wordLen = targetWord.length;
+  const targetWord = words[Math.floor(Math.random() * words.length)];
+  const wordLength = targetWord.length;
+  const totalHints = personalityHints[targetWord].length;
 
-  const players: Record<string, WordGuessPlayerState> = {};
+  const players: Record<string, PlayerGridState> = {};
 
   for (const pid of playerIds) {
-    const grid: (string | null)[] = new Array(wordLen).fill(null);
-    const locked: boolean[] = new Array(wordLen).fill(false);
+    const grid = new Array(wordLength).fill('');
+    const locked = new Array(wordLength).fill(false);
 
-    // two starting letters per player, positions differ (random)
-    const [p1, p2] = getTwoPositions(wordLen);
-    grid[p1] = targetWord[p1];
-    grid[p2] = targetWord[p2];
-    locked[p1] = true;
-    locked[p2] = true;
+    // reveal EXACTLY 2 random letters for THIS player
+    const revealed = new Set<number>();
+    while (revealed.size < 2) {
+      const idx = Math.floor(Math.random() * wordLength);
+      revealed.add(idx);
+    }
 
-    // each player starts with exactly 1 hint index unlocked (different distribution across players is handled naturally if UI chooses)
-    const firstHintIndex = allHints.length ? randInt(allHints.length) : 0;
+    revealed.forEach(i => {
+      grid[i] = targetWord[i];
+      locked[i] = true;
+    });
 
     players[pid] = {
-      hearts: 10,
       grid,
       locked,
-      powerups: getRandomPowerups(),
-      usedPowerupThisRound: false,
-      misguideActive: false,
-      placedThisRound: false,
-      hintIndices: allHints.length ? [firstHintIndex] : [],
-      opSeenJumble: false,
-      eliminated: false
+      lives: 10,
+      powerups: shuffleC(POWERUPS).slice(0, 2),
+      hintIndex: Math.floor(Math.random() * totalHints)
     };
   }
 
   return {
-    phase: 'powerup',
+    phase: "powerup",
     targetWord,
-    category: 'funora-word-battle',
-    hints: allHints,
+    hints: personalityHints[targetWord],
     round: 1,
-    maxHearts: 10,
     players,
-    winnerId: null
+    unlockInterval: 2
   };
 };
+
+
 
 // ======================
 // HINT + GUESS UTILITIES
