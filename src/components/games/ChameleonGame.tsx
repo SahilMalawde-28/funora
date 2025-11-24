@@ -628,7 +628,7 @@ export default function ChamaleonGame({
                 <b>{mostVotedPlayer?.name ?? "No clear target"}</b>
               </p>
               <p className="text-sm">
-                Actual Chameleon: <b>{imposterPlayer?.name}</b>
+                Actual Chameleon: <b>***</b>
               </p>
 
               <div className="mt-2 text-xs">
