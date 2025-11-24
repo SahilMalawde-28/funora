@@ -29,6 +29,19 @@ interface CoupGameProps {
 // Helper to track special chain after someone loses a card
 type AfterLoseFlag = "continue_action" | "block_stands";
 
+// Extra helper (stored in gameState.challengeWindow as any)
+type ChallengeWindow = {
+  type: "action" | "block";
+  challengerId: string;
+  challengedId: string;
+  role: CoupRole;
+  hasRole: boolean; // whether challenged player actually has the role
+};
+
+type ChallengeVotes = {
+  [playerId: string]: "skip" | "challenge";
+};
+
 export default function CoupGame({
   room,
   players,
@@ -51,7 +64,7 @@ export default function CoupGame({
   );
   const [exchangeSelectedIds, setExchangeSelectedIds] = useState<string[]>([]);
 
-  // Click lock for smooth UX
+  // Global click lock
   const [clickLocked, setClickLocked] = useState(false);
   const lockClick = () => {
     setClickLocked(true);
@@ -122,7 +135,16 @@ export default function CoupGame({
     };
   };
 
-  // Basic loseInfluence (used when we aren’t in fancy chain flow)
+  // Access challenge window / votes from state as loose any
+  const getChallengeWindow = (): ChallengeWindow | null => {
+    return (gameState.challengeWindow as any as ChallengeWindow) || null;
+  };
+
+  const getChallengeVotes = (): ChallengeVotes => {
+    return ((gameState as any).challengeVotes as ChallengeVotes) || {};
+  };
+
+  // Basic loseInfluence (used when not in special chains)
   const loseInfluence = (
     state: CoupGameState,
     playerId: string,
@@ -265,6 +287,7 @@ export default function CoupGame({
     s.pendingAction = null;
     s.pendingBlock = null;
     s.challengeWindow = null;
+    (s as any).challengeVotes = undefined;
     s.revealInfo = null;
     s.phase = "choose_action";
 
@@ -301,6 +324,8 @@ export default function CoupGame({
     if (type === "foreign_aid") {
       s.pendingAction = { actorId: myId, type };
       s.phase = "pending_block";
+      s.challengeWindow = null;
+      (s as any).challengeVotes = undefined;
       addLog(
         `💰 ${
           findPlayer(myId)?.name ?? "?"
@@ -317,6 +342,8 @@ export default function CoupGame({
         claimedRole: "chancellor",
       };
       s.phase = "pending_challenge_on_action";
+      s.challengeWindow = null;
+      (s as any).challengeVotes = {};
       addLog(
         `💼 ${findPlayer(myId)?.name ?? "?"} claims CHANCELLOR to take 3 coins`
       );
@@ -334,6 +361,8 @@ export default function CoupGame({
         targetId,
       };
       s.phase = "pending_challenge_on_action";
+      s.challengeWindow = null;
+      (s as any).challengeVotes = {};
       addLog(
         `🗡 ${findPlayer(myId)?.name ?? "?"} claims SHADOW to assassinate ${
           findPlayer(targetId)?.name ?? "?"
@@ -352,6 +381,8 @@ export default function CoupGame({
         targetId,
       };
       s.phase = "pending_challenge_on_action";
+      s.challengeWindow = null;
+      (s as any).challengeVotes = {};
       addLog(
         `🕵️ ${findPlayer(myId)?.name ?? "?"} claims AGENT to steal from ${
           findPlayer(targetId)?.name ?? "?"
@@ -368,6 +399,8 @@ export default function CoupGame({
         claimedRole: "diplomat",
       };
       s.phase = "pending_challenge_on_action";
+      s.challengeWindow = null;
+      (s as any).challengeVotes = {};
       addLog(
         `🎭 ${findPlayer(myId)?.name ?? "?"} claims DIPLOMAT to exchange cards`
       );
@@ -409,6 +442,8 @@ export default function CoupGame({
     if (gameState.phase !== "pending_challenge_on_action") return false;
     if (!myState?.alive) return false;
     if (myId === act.actorId) return false;
+    // if a challenge is already in progress, no more
+    if (getChallengeWindow()) return false;
     return true;
   };
 
@@ -428,10 +463,94 @@ export default function CoupGame({
     if (gameState.phase !== "pending_challenge_on_block") return false;
     if (!myState?.alive) return false;
     if (myId === pb.blockerId) return false;
+    if (getChallengeWindow()) return false;
     return true;
   };
 
-  // === CHALLENGE RESOLUTION (with truthful card replacement) ===
+  const canSkipChallenge = () => {
+    if (!myState?.alive) return false;
+    if (getChallengeWindow()) return false;
+
+    if (gameState.phase === "pending_challenge_on_action") {
+      const act = gameState.pendingAction;
+      if (!act) return false;
+      if (myId === act.actorId) return false;
+      return true;
+    }
+
+    if (gameState.phase === "pending_challenge_on_block") {
+      const pb = gameState.pendingBlock;
+      if (!pb) return false;
+      if (myId === pb.blockerId) return false;
+      return true;
+    }
+
+    return false;
+  };
+
+  // === PURE HELPERS FOR "NO CHALLENGE" ===
+
+  const proceedNoChallengeOnAction = (state: CoupGameState): CoupGameState => {
+    let s: CoupGameState = { ...state };
+    const act = s.pendingAction;
+    if (!act) return s;
+
+    (s as any).challengeVotes = undefined;
+    s.challengeWindow = null;
+
+    if (act.type === "tax") {
+      s = applyActionEffect(s);
+    } else if (act.type === "exchange") {
+      s.phase = "exchange_cards";
+      addLog(
+        `🎭 ${findPlayer(act.actorId)?.name ?? "?"} is exchanging cards...`
+      );
+    } else if (act.type === "assassinate" || act.type === "steal") {
+      s.phase = "pending_block";
+      addLog(`➡ Waiting for possible block...`);
+    } else {
+      s = applyActionEffect(s);
+    }
+
+    return s;
+  };
+
+  const proceedNoChallengeOnBlock = (state: CoupGameState): CoupGameState => {
+    let s: CoupGameState = { ...state };
+    const pb = s.pendingBlock;
+
+    (s as any).challengeVotes = undefined;
+    s.challengeWindow = null;
+
+    if (!pb || !s.pendingAction) {
+      s.pendingBlock = null;
+      s.phase = "choose_action";
+      s.currentTurnIndex = getNextTurnIndex(s);
+      s = checkGameOver(s);
+      return s;
+    }
+
+    if (pb.blockingAction === "foreign_aid") {
+      addLog(`💼 Chancellor successfully blocks Foreign Aid.`);
+      s.pendingAction = null;
+      s.pendingBlock = null;
+    } else if (pb.blockingAction === "assassinate") {
+      addLog(`🛡 Protector blocks assassination.`);
+      s.pendingAction = null;
+      s.pendingBlock = null;
+    } else if (pb.blockingAction === "steal") {
+      addLog(`🛡 Steal blocked by ${pb.role.toUpperCase()}.`);
+      s.pendingAction = null;
+      s.pendingBlock = null;
+    }
+
+    s.phase = "choose_action";
+    s.currentTurnIndex = getNextTurnIndex(s);
+    s = checkGameOver(s);
+    return s;
+  };
+
+  // === CHALLENGE RESOLUTION (called AFTER Not Fake chosen) ===
 
   const resolveChallenge = (
     truthful: boolean,
@@ -447,7 +566,7 @@ export default function CoupGame({
       gameState.phase === "pending_challenge_on_block";
 
     if (truthful) {
-      // ✅ Challenged player was telling the truth
+      // Challenged player was telling the truth
       addLog(
         `✅ Challenge failed: ${
           findPlayer(challengedId)?.name ?? "?"
@@ -456,10 +575,9 @@ export default function CoupGame({
         } loses a card.`
       );
 
-      // 🃏 Replace the revealed truthful card with a new one from the deck
+      // Replace the truthful shown card with a new one from the deck
       const player = s.players[challengedId];
       if (player) {
-        // Choose a hidden card of that role
         const hiddenOfRole = player.influences.filter(
           (inf) => !inf.revealed && inf.role === role
         );
@@ -470,7 +588,6 @@ export default function CoupGame({
             (inf) => inf.id !== cardToReplace.id
           );
 
-          // Draw top card from deck
           const newCard = s.deck[s.deck.length - 1];
           let newDeck = s.deck.slice(0, -1);
 
@@ -479,7 +596,7 @@ export default function CoupGame({
             { ...newCard, revealed: false },
           ];
 
-          // Put revealed card at bottom of deck (face-down)
+          // Put old card at bottom of deck, face-down
           newDeck.unshift({ ...cardToReplace, revealed: false });
 
           s.players = {
@@ -507,8 +624,9 @@ export default function CoupGame({
         afterLose,
       } as any;
       s.challengeWindow = null;
+      (s as any).challengeVotes = undefined;
     } else {
-      // ❌ Liar
+      // Liar
       addLog(
         `❌ Bluff caught: ${
           findPlayer(challengedId)?.name ?? "?"
@@ -521,12 +639,15 @@ export default function CoupGame({
         loserPlayerId: challengedId,
       } as any;
       s.challengeWindow = null;
+      (s as any).challengeVotes = undefined;
       s.pendingAction = null;
       s.pendingBlock = null;
     }
 
     onUpdateState(s);
   };
+
+  // === CHALLENGE BUTTONS (do NOT resolve, just open fake/not-fake window) ===
 
   const handleChallengeAction = () => {
     const act = gameState.pendingAction;
@@ -538,7 +659,18 @@ export default function CoupGame({
     const hasRole = actorState.influences.some(
       (inf) => !inf.revealed && inf.role === act.claimedRole
     );
-    resolveChallenge(hasRole, act.actorId, act.claimedRole, myId);
+
+    const s: CoupGameState = {
+      ...gameState,
+      challengeWindow: {
+        type: "action",
+        challengerId: myId,
+        challengedId: act.actorId,
+        role: act.claimedRole,
+        hasRole,
+      } as any,
+    };
+    onUpdateState(s);
   };
 
   const handleChallengeBlock = () => {
@@ -550,7 +682,114 @@ export default function CoupGame({
     const hasRole = blockerState.influences.some(
       (inf) => !inf.revealed && inf.role === pb.role
     );
-    resolveChallenge(hasRole, pb.blockerId, pb.role, myId);
+
+    const s: CoupGameState = {
+      ...gameState,
+      challengeWindow: {
+        type: "block",
+        challengerId: myId,
+        challengedId: pb.blockerId,
+        role: pb.role,
+        hasRole,
+      } as any,
+    };
+    onUpdateState(s);
+  };
+
+  // === RESPOND TO CHALLENGE: FAKE / NOT FAKE ===
+
+  const handleChallengeResponseNotFake = () => {
+    const cw = getChallengeWindow();
+    if (!cw || cw.challengedId !== myId || clickLocked) return;
+    lockClick();
+
+    if (cw.hasRole) {
+      // I really have it → wrong challenge
+      resolveChallenge(true, cw.challengedId, cw.role, cw.challengerId);
+    } else {
+      // I don't have it → correct challenge
+      resolveChallenge(false, cw.challengedId, cw.role, cw.challengerId);
+    }
+  };
+
+  const handleChallengeResponseFake = () => {
+    const cw = getChallengeWindow();
+    if (!cw || cw.challengedId !== myId || clickLocked) return;
+    if (!cw.hasRole) return; // cannot fake if you don't actually have it
+    if (cw.type !== "action") return; // fake only supported for action claims
+    lockClick();
+
+    // You choose to fake: you lose a card, action is cancelled, challenger safe.
+    let s: CoupGameState = { ...gameState };
+    addLog(
+      `😈 ${
+        findPlayer(cw.challengedId)?.name ?? "?"
+      } chooses to FAKE and loses a card. Action is cancelled.`
+    );
+
+    s.phase = "choose_influence_to_lose";
+    s.revealInfo = {
+      ...(s.revealInfo as any),
+      loserPlayerId: cw.challengedId,
+    } as any;
+    s.pendingAction = null;
+    s.pendingBlock = null;
+    s.challengeWindow = null;
+    (s as any).challengeVotes = undefined;
+
+    onUpdateState(s);
+  };
+
+  // === SKIP CHALLENGE (per-player voting, auto-continue) ===
+
+  const handleSkipChallenge = () => {
+    if (!canSkipChallenge() || clickLocked) return;
+    lockClick();
+
+    const cw = getChallengeWindow();
+    if (cw) return; // there's already a challenge in progress
+
+    const phase = gameState.phase;
+    const votes = { ...getChallengeVotes() };
+
+    votes[myId] = "skip";
+
+    let actorId: string | null = null;
+    if (phase === "pending_challenge_on_action" && gameState.pendingAction) {
+      actorId = gameState.pendingAction.actorId;
+    } else if (
+      phase === "pending_challenge_on_block" &&
+      gameState.pendingBlock
+    ) {
+      actorId = gameState.pendingBlock.blockerId;
+    }
+
+    if (!actorId) {
+      onUpdateState({ challengeVotes: votes } as any);
+      return;
+    }
+
+    const aliveVoters = Object.values(gameState.players)
+      .filter((p) => p.alive && p.playerId !== actorId)
+      .map((p) => p.playerId);
+
+    const allAnswered = aliveVoters.every(
+      (pid) => votes[pid] === "skip" || votes[pid] === "challenge"
+    );
+
+    if (!allAnswered) {
+      onUpdateState({ challengeVotes: votes } as any);
+      return;
+    }
+
+    // Everyone answered and no challengeWindow: auto "no challenge"
+    let s: CoupGameState = { ...gameState, challengeVotes: votes } as any;
+    if (phase === "pending_challenge_on_action") {
+      s = proceedNoChallengeOnAction(s);
+    } else if (phase === "pending_challenge_on_block") {
+      s = proceedNoChallengeOnBlock(s);
+    }
+    onUpdateState(s);
   };
 
   // === HOST “NO ONE CHALLENGED/BLOCKED” HELPERS ===
@@ -560,24 +799,7 @@ export default function CoupGame({
     if (gameState.phase !== "pending_challenge_on_action") return;
     lockClick();
 
-    let s: CoupGameState = { ...gameState };
-    const act = s.pendingAction;
-    if (!act) return;
-
-    if (act.type === "tax") {
-      s = applyActionEffect(s);
-    } else if (act.type === "exchange") {
-      s.phase = "exchange_cards";
-      addLog(
-        `🎭 ${findPlayer(act.actorId)?.name ?? "?"} is exchanging cards...`
-      );
-    } else if (act.type === "assassinate" || act.type === "steal") {
-      s.phase = "pending_block";
-      addLog(`➡ Waiting for possible block...`);
-    } else {
-      s = applyActionEffect(s);
-    }
-
+    let s = proceedNoChallengeOnAction(gameState);
     onUpdateState(s);
   };
 
@@ -602,6 +824,8 @@ export default function CoupGame({
       blockingAction: act.type,
     };
     s.phase = "pending_challenge_on_block";
+    s.challengeWindow = null;
+    (s as any).challengeVotes = {};
     addLog(
       `🛡 ${findPlayer(myId)?.name ?? "?"} blocks ${
         act.type
@@ -631,34 +855,7 @@ export default function CoupGame({
     if (gameState.phase !== "pending_challenge_on_block") return;
     lockClick();
 
-    let s: CoupGameState = { ...gameState };
-    const pb = s.pendingBlock;
-    if (!pb || !s.pendingAction) {
-      s.pendingBlock = null;
-      s.phase = "choose_action";
-      s.currentTurnIndex = getNextTurnIndex(s);
-      s = checkGameOver(s);
-      onUpdateState(s);
-      return;
-    }
-
-    if (pb.blockingAction === "foreign_aid") {
-      addLog(`💼 Chancellor successfully blocks Foreign Aid.`);
-      s.pendingAction = null;
-      s.pendingBlock = null;
-    } else if (pb.blockingAction === "assassinate") {
-      addLog(`🛡 Protector blocks assassination.`);
-      s.pendingAction = null;
-      s.pendingBlock = null;
-    } else if (pb.blockingAction === "steal") {
-      addLog(`🛡 Steal blocked by ${pb.role.toUpperCase()}.`);
-      s.pendingAction = null;
-      s.pendingBlock = null;
-    }
-
-    s.phase = "choose_action";
-    s.currentTurnIndex = getNextTurnIndex(s);
-    s = checkGameOver(s);
+    let s = proceedNoChallengeOnBlock(gameState);
     onUpdateState(s);
   };
 
@@ -854,6 +1051,7 @@ export default function CoupGame({
       phase: "choose_action",
     };
 
+    (s as any).challengeVotes = undefined;
     s.currentTurnIndex = getNextTurnIndex(s);
     s = checkGameOver(s);
     addLog(
@@ -930,13 +1128,13 @@ export default function CoupGame({
       return "Your turn: choose an action.";
     }
     if (gameState.phase === "pending_challenge_on_action") {
-      return "Role claimed. Others may challenge.";
+      return "Role claimed. Others may challenge or skip.";
     }
     if (gameState.phase === "pending_block") {
       return "Action can be blocked.";
     }
     if (gameState.phase === "pending_challenge_on_block") {
-      return "Block claimed. Others may challenge.";
+      return "Block claimed. Others may challenge or skip.";
     }
     if (gameState.phase === "choose_influence_to_lose") {
       return "A player must choose a card to lose.";
@@ -981,11 +1179,16 @@ export default function CoupGame({
 
     if (gameState.phase === "pending_challenge_on_block" && pb) {
       const n = findPlayer(pb.blockerId)?.name ?? "Someone";
-      return `${n} is blocking as ${pb.role.toUpperCase()}. Others may challenge.`;
+      return `${n} is blocking as ${pb.role.toUpperCase()}. Others may challenge or skip.`;
     }
 
     return "";
   })();
+
+  const challengeWindow = getChallengeWindow();
+  const challengeVotes = getChallengeVotes();
+  const iAmChallenged =
+    !!challengeWindow && challengeWindow.challengedId === myId;
 
   if (gameState.phase === "game_over" && gameState.winnerId) {
     const winner = findPlayer(gameState.winnerId);
@@ -1246,6 +1449,7 @@ export default function CoupGame({
               <li>• Anyone can Challenge role claims.</li>
               <li>• True claim: challenger loses a card, claimant swaps shown role.</li>
               <li>• False claim: liar loses a card and action is cancelled.</li>
+              <li>• You may FAKE even if you were truthful: you lose a card, action stops.</li>
               <li>• Assassinate & Coup force the target to lose influence.</li>
               <li>• Lose all influence = you’re out. Last player alive wins.</li>
             </ul>
@@ -1297,7 +1501,7 @@ export default function CoupGame({
               )}
           </div>
 
-          {/* Actions */}
+          {/* Actions + challenge responses */}
           <div className="flex-1 flex flex-col gap-2 items-stretch">
             <div className="flex flex-wrap gap-2 justify-end text-[11px] md:text-xs">
               {isMyTurn && myState.alive && (
@@ -1362,6 +1566,23 @@ export default function CoupGame({
                       <span>Challenge Action</span>
                     </button>
                   )}
+                  {canChallengeBlock() && (
+                    <button
+                      onClick={handleChallengeBlock}
+                      className="px-3 py-1.5 rounded-xl bg-red-900/80 hover:bg-red-800 border border-red-500/80 flex items-center gap-1"
+                    >
+                      <AlertTriangle className="w-3 h-3" />
+                      <span>Challenge Block</span>
+                    </button>
+                  )}
+                  {canSkipChallenge() && (
+                    <button
+                      onClick={handleSkipChallenge}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600"
+                    >
+                      Skip Challenge
+                    </button>
+                  )}
                   {canBlock() && (
                     <div className="flex flex-wrap gap-1 justify-end">
                       {gameState.pendingAction?.type === "foreign_aid" && (
@@ -1404,29 +1625,55 @@ export default function CoupGame({
                       </button>
                     </div>
                   )}
-                  {canChallengeBlock() && (
-                    <button
-                      onClick={handleChallengeBlock}
-                      className="px-3 py-1.5 rounded-xl bg-red-900/80 hover:bg-red-800 border border-red-500/80 flex items-center gap-1"
-                    >
-                      <AlertTriangle className="w-3 h-3" />
-                      <span>Challenge Block</span>
-                    </button>
-                  )}
                 </>
               )}
             </div>
+
+            {/* Challenge response (Fake / Not Fake) */}
+            {iAmChallenged && (
+              <div className="flex flex-col items-end gap-1 mt-1">
+                <p className="text-[10px] text-yellow-300 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  You&apos;ve been challenged on {challengeWindow?.role.toUpperCase()}
+                  . Choose:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={handleChallengeResponseNotFake}
+                    className="px-3 py-1.5 rounded-xl bg-green-900/80 hover:bg-green-800 border border-green-500/80 text-[11px]"
+                  >
+                    Not Fake (Show / Resolve)
+                  </button>
+                  {challengeWindow?.type === "action" &&
+                    challengeWindow?.hasRole && (
+                      <button
+                        onClick={handleChallengeResponseFake}
+                        className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-500/80 text-[11px]"
+                      >
+                        Fake (Lose Card, Cancel Action)
+                      </button>
+                    )}
+                </div>
+              </div>
+            )}
 
             {/* Host helpers */}
             {isHost && (
               <div className="flex flex-wrap gap-2 justify-end text-[10px] mt-1 text-slate-300">
                 {gameState.phase === "pending_challenge_on_action" && (
-                  <button
-                    onClick={handleHostNoChallengeOnAction}
-                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600"
-                  >
-                    Host: No one challenged
-                  </button>
+                  <>
+                    <button
+                      onClick={handleHostNoChallengeOnAction}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600"
+                    >
+                      Host: No one challenged
+                    </button>
+                    {Object.keys(challengeVotes).length > 0 && (
+                      <span className="text-[10px] text-slate-500 self-center">
+                        Responses: {Object.keys(challengeVotes).length}
+                      </span>
+                    )}
+                  </>
                 )}
                 {gameState.phase === "pending_block" && (
                   <button
@@ -1437,12 +1684,19 @@ export default function CoupGame({
                   </button>
                 )}
                 {gameState.phase === "pending_challenge_on_block" && (
-                  <button
-                    onClick={handleHostNoChallengeOnBlock}
-                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600"
-                  >
-                    Host: No challenge on block
-                  </button>
+                  <>
+                    <button
+                      onClick={handleHostNoChallengeOnBlock}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600"
+                    >
+                      Host: No challenge on block
+                    </button>
+                    {Object.keys(challengeVotes).length > 0 && (
+                      <span className="text-[10px] text-slate-500 self-center">
+                        Responses: {Object.keys(challengeVotes).length}
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
             )}
