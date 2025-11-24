@@ -1537,1082 +1537,280 @@ export const initWavelengthGame = (playerIds: string[]): WavelengthGameState => 
 
 // gameLogic/wordGuess.ts
 
-export interface WordGuessGameState {
-  phase: 'guessing' | 'ended';
-  targetWord: string;
-  hints: string[];
-  guesses: Record<string, string>;
-  hintsUsed: number;
-  maxHints: number;
-  round: number;
+// =======================
+// WORD GUESS / GRID BATTLE
+// =======================
+
+export type WordGuessPhase = 'powerup' | 'letters' | 'reveal' | 'ended';
+
+export type WordGuessPowerup =
+  | 'MISGUIDE'
+  | 'PEEK'
+  | 'HINT'
+  | 'LETTER_DROP'
+  | 'EXTRA_LIFE'
+  | 'OP';
+
+export interface WordGuessPlayerState {
+  hearts: number;                       // remaining lives
+  grid: (string | null)[];             // current letters per position
+  locked: boolean[];                   // true = confirmed correct
+  powerups: WordGuessPowerup[];        // 2 powerups at start
+  usedPowerupThisRound: boolean;       // has used a powerup this round
+  misguideActive: boolean;             // next correct letter will be treated as wrong
+  placedThisRound: boolean;            // used to penalize skipping
+  hintIndices: number[];               // which hint indices this player has unlocked
+  opSeenJumble: boolean;               // did they already see the OP jumble
+  eliminated: boolean;                 // hearts <= 0
 }
 
+// 🔁 Game-level state
+export interface WordGuessGameState {
+  phase: WordGuessPhase;
+  targetWord: string;                  // actual word (e.g. "Valorant")
+  category: string;                    // optional category label, if needed later
+  hints: string[];                     // 8 cryptic hints for this word
+  round: number;                       // starts at 1
+  maxHearts: number;                   // usually 10
+  players: Record<string, WordGuessPlayerState>;
+  winnerId: string | null;             // player_id of winner when ended
+}
+
+// ===============
+// HELPER: RANDOMS
+// ===============
+
+// You already have shuffleC elsewhere; we'll still use a tiny random helper.
+const randInt = (n: number) => Math.floor(Math.random() * n);
+
+// Decide 2 random non-equal indices for starting revealed letters
+const getTwoPositions = (len: number): [number, number] => {
+  const first = randInt(len);
+  let second = randInt(len);
+  if (second === first && len > 1) {
+    second = (second + 1) % len;
+  }
+  return [first, second];
+};
+
+// Random powerups with ultra-rare OP
+const getRandomPowerups = (): WordGuessPowerup[] => {
+  const basePool: WordGuessPowerup[] = [
+    'MISGUIDE',
+    'PEEK',
+    'HINT',
+    'LETTER_DROP',
+    'EXTRA_LIFE',
+  ];
+
+  // 1% chance for OP in any slot
+  const roll = Math.random();
+  const first: WordGuessPowerup =
+    roll < 0.01
+      ? 'OP'
+      : basePool[randInt(basePool.length)];
+
+  // second one from base pool (can be same or different – a bit of chaos is fine)
+  const second: WordGuessPowerup =
+    basePool[randInt(basePool.length)];
+
+  return [first, second];
+};
+
+// ===========================
+// WORD BANK (10 STARTER WORDS)
+// ===========================
+//
+// Keys are the "words" themselves (no spaces, 6–15 letters).
+// Hints are short, cryptic, and non-obvious.
+//
+
+export const personalityHints: Record<string, string[]> = {
+  // 🎮 Games / Esports / College-ish vibes
+
+  Valorant: [
+    '5v5, but not football',
+    'A or B, attack first',
+    'Red spike problem',
+    '13 is a perfect day',
+    'Lineups > raw aim sometimes',
+    'No shoes, still sprint',
+    'Eco vs full buy pain',
+    'Riot aimlab child'
+  ],
+
+  Battlegrounds: [
+    'Lobby → plane → chaos',
+    'Circle hates campers',
+    'Winner eats dinner',
+    'Hot drop = 50/50 life',
+    'M416 religion arc',
+    'Third person betrayal',
+    'Car flip tragedy',
+    'Loot first, footsteps later'
+  ],
+
+  FresherParty: [
+    'Happens only once per batch',
+    'Theme rarely followed',
+    'Photos → lifetime leverage',
+    'Dance floor = attendance proxy',
+    'Seniors suddenly friendly',
+    'Awkward intros + loud DJ',
+    'Outfit stress > exam stress',
+    'Not about academics at all'
+  ],
+
+  EnggMaths: [
+    'More Greek than English',
+    'Integration nightmare arc',
+    'Calculator cannot save internals',
+    'One unit = six chapters',
+    'Attendance << derivation count',
+    'Plotting graphs at 2am',
+    'Limits test your limit',
+    'Backlog boss fight'
+  ],
+
+  CounterStrike: [
+    'Dust never fully settles',
+    'Eco round character development',
+    'Flash → rush → hope',
+    'Knife = ultimate disrespect',
+    'One tap life',
+    'A or B, rotate fast',
+    'Defuse kit anxiety',
+    'Oldest LAN tradition'
+  ],
+
+  LastMinuteSub: [
+    'We knew the date for weeks',
+    'Printer jams on D-day',
+    'Copy → edit → panic',
+    'Submitted, then actually read it',
+    'Group work, solo execution',
+    'Timestamp screenshot culture',
+    'Teacher still says late',
+    'Cycle repeats next week'
+  ],
+
+  RecessTime: [
+    'Shortest happy interval',
+    'Food swapping diplomacy',
+    'Benches become beds',
+    'Last bite during attendance',
+    'Uno + arguments package',
+    'Teachers chase late entries',
+    'Water bottle refuel meta',
+    'Never feels enough'
+  ],
+
+  MessFood: [
+    'Unlimited rice side quest',
+    'Salt DLC missing sometimes',
+    'Sunday special debate',
+    'Bonding over complaints',
+    'Tastes better near exams',
+    'Free but emotionally expensive',
+    'One dish saves whole week',
+    'Menu lies occasionally'
+  ],
+
+  GroupStudy: [
+    'One studies, rest motivate',
+    'Notes become hard currency',
+    'Tea fuels productivity illusion',
+    'Distractions > syllabus pages',
+    'Start 8pm, peak 1am',
+    'Google is unofficial member',
+    'Plan toppers, execute survival',
+    'Exam tomorrow tradition'
+  ],
+
+  LibraryBench: [
+    'Silent but fully occupied',
+    'Chairs mysteriously reserved',
+    'WiFi just enough',
+    'Sleep posing as concentration',
+    'Charging points = VIP seats',
+    'Books as laptop stands',
+    'Nightouts without parties',
+    'Aircon lottery tickets'
+  ]
+};
+
+// ==========================
+// INIT WORD GUESS GAME STATE
+// ==========================
+
 export const initWordGuessGame = (playerIds: string[]): WordGuessGameState => {
-  const personalities = Object.keys(personalityHints);
-  const targetWord = personalities[Math.floor(Math.random() * personalities.length)];
+  const words = Object.keys(personalityHints);
+  const targetKey = words[randInt(words.length)];
+  const targetWord = targetKey; // keep same as key (no spaces in our list)
+  const allHints = personalityHints[targetKey] || [];
+  const wordLen = targetWord.length;
+
+  const players: Record<string, WordGuessPlayerState> = {};
+
+  for (const pid of playerIds) {
+    const grid: (string | null)[] = new Array(wordLen).fill(null);
+    const locked: boolean[] = new Array(wordLen).fill(false);
+
+    // two starting letters per player, positions differ (random)
+    const [p1, p2] = getTwoPositions(wordLen);
+    grid[p1] = targetWord[p1];
+    grid[p2] = targetWord[p2];
+    locked[p1] = true;
+    locked[p2] = true;
+
+    // each player starts with exactly 1 hint index unlocked (different distribution across players is handled naturally if UI chooses)
+    const firstHintIndex = allHints.length ? randInt(allHints.length) : 0;
+
+    players[pid] = {
+      hearts: 10,
+      grid,
+      locked,
+      powerups: getRandomPowerups(),
+      usedPowerupThisRound: false,
+      misguideActive: false,
+      placedThisRound: false,
+      hintIndices: allHints.length ? [firstHintIndex] : [],
+      opSeenJumble: false,
+      eliminated: false
+    };
+  }
 
   return {
-    phase: 'guessing',
+    phase: 'powerup',
     targetWord,
-    hints: [],
-    guesses: {},
-    hintsUsed: 0,
-    maxHints: 10,
-    round: 1
+    category: 'funora-word-battle',
+    hints: allHints,
+    round: 1,
+    maxHearts: 10,
+    players,
+    winnerId: null
   };
 };
 
-// ✅ Generate hints progressively
+// ======================
+// HINT + GUESS UTILITIES
+// ======================
+
+// Keep name same for compatibility, but now "word" is the key from personalityHints.
+// hintsUsed can be any integer; we clamp to available hints.
 export const generateWordHint = (word: string, hintsUsed: number): string => {
   const allHints = personalityHints[word] || [];
-  return allHints[Math.min(hintsUsed, allHints.length - 1)] || "No more hints!";
+  if (!allHints.length) return 'No hints available.';
+  const idx = Math.min(Math.max(hintsUsed, 0), allHints.length - 1);
+  return allHints[idx];
 };
 
-// ✅ Guess checker (accepts first name OR surname)
+// Simple correctness check: full word match (case-insensitive).
+// (You can still repurpose this for "final full-word guess" if needed.)
 export const isGuessCorrect = (word: string, guess: string): boolean => {
   const normalizedGuess = guess.trim().toLowerCase();
-  const parts = word.toLowerCase().split(" ");
-  return parts.some(p => normalizedGuess === p);
-};
-
-// 🏆 Master list of 100 rare personalities with 10 hints each
-export const personalityHints: Record<string, string[]> = {
-  // ⚽ FOOTBALL LEGENDS
-  "Lionel Messi": [
-  "Footballer",
-  "Male athlete",
-  "From South America",
-  "Short and left-footed",
-  "Played most of career in Spain",
-  "Nicknamed ‘La Pulga’",
-  "Won 2022 World Cup",
-  "Has 8 Ballon d'Ors",
-  "Played for Barcelona and PSG",
-  "Argentinian GOAT"
-],
-
-"Cristiano Ronaldo": [
-  "Footballer",
-  "Male athlete",
-  "European superstar",
-  "Fitness icon",
-  "Known for headers and goals",
-  "Celebration goes 'Siuuu!'",
-  "Played for Man United, Real Madrid, Juventus",
-  "Portugal captain",
-  "Has over 850 career goals",
-  "CR7 legend"
-],
-
-"Kylian Mbappe": [
-  "Footballer",
-  "French player",
-  "Fast as lightning",
-  "World Cup winner as a teen",
-  "Played for PSG",
-  "Wears number 10 for France",
-  "Hat-trick in 2022 final",
-  "Linked with Real Madrid for years",
-  "Born in 1998",
-  "Face of new generation"
-],
-
-"Erling Haaland": [
-  "Footballer",
-  "European striker",
-  "From Norway",
-  "Tall and powerful",
-  "Plays for Manchester City",
-  "Robotic finisher",
-  "Son of a footballer",
-  "Meditation goal celebration",
-  "Scored 36 EPL goals in a season",
-  "Blonde beast"
-],
-
-"Neymar Jr": [
-  "Footballer",
-  "Brazilian",
-  "Skillful and flashy",
-  "Known for dribbling and flair",
-  "Played for Barcelona and PSG",
-  "Wears number 10",
-  "Star of 2014 and 2018 World Cups",
-  "Huge on social media",
-  "Friend of Messi",
-  "Brazilian magician"
-],
-
-"Robert Lewandowski": [
-  "Footballer",
-  "European striker",
-  "From Poland",
-  "Goal-scoring machine",
-  "Played for Bayern Munich",
-  "Now at Barcelona",
-  "Known for consistency",
-  "Scored 5 goals in 9 minutes",
-  "Ballon d’Or contender",
-  "Polish legend"
-],
-
-"Luka Modric": [
-  "Footballer",
-  "From Croatia",
-  "Midfield maestro",
-  "Plays for Real Madrid",
-  "Golden Ball 2018 WC",
-  "Known for outside-foot passes",
-  "Small but brilliant",
-  "Led Croatia to WC final",
-  "Wears number 10",
-  "Classy playmaker"
-],
-
-"Sergio Ramos": [
-  "Footballer",
-  "Spanish defender",
-  "Tough and aggressive",
-  "Captain material",
-  "Played for Real Madrid",
-  "Known for headers and penalties",
-  "Won multiple UCLs",
-  "From Sevilla",
-  "Has red card record",
-  "Spain’s warrior"
-],
-
-"Harry Kane": [
-  "Footballer",
-  "From England",
-  "Captain of his national team",
-  "Known for shooting accuracy",
-  "Played for Tottenham",
-  "Moved to Bayern Munich",
-  "Golden Boot winner",
-  "Calm finisher",
-  "Married to childhood sweetheart",
-  "England’s striker"
-],
-
-"Vinicius Jr": [
-  "Footballer",
-  "Brazilian winger",
-  "Fast and tricky",
-  "Plays for Real Madrid",
-  "Known for celebrations",
-  "Young superstar",
-  "La Liga champion",
-  "Scored in UCL final 2022",
-  "Has rivalry with Barca fans",
-  "Next-gen Brazilian"
-],
-
-// 🏏 Cricket Stars
-
-"Sachin Tendulkar": [
-  "Cricketer",
-  "Male athlete",
-  "From India",
-  "Started young",
-  "Wore number 10 jersey",
-  "Called ‘God of Cricket’",
-  "Played for Mumbai Indians",
-  "Scored 100 centuries",
-  "Won 2011 World Cup",
-  "Little Master"
-],
-
-"Virat Kohli": [
-  "Cricketer",
-  "Indian batsman",
-  "Known for aggression",
-  "Fitness icon",
-  "Married to a Bollywood actress",
-  "Plays for RCB",
-  "Called ‘King’",
-  "Chased 183 vs Pakistan",
-  "Delhi-born",
-  "Modern legend"
-],
-
-"MS Dhoni": [
-  "Cricketer",
-  "Indian captain",
-  "Wicketkeeper",
-  "Known as Captain Cool",
-  "Finished 2011 final with a six",
-  "Led India to all ICC titles",
-  "CSK icon",
-  "From Ranchi",
-  "Served in Indian Army",
-  "Best finisher"
-],
-
-"AB de Villiers": [
-  "Cricketer",
-  "South African",
-  "Mr. 360",
-  "Played for RCB",
-  "Inventive batsman",
-  "Fastest ODI century",
-  "Electric fielder",
-  "Retired early",
-  "Loved by Indian fans",
-  "Cricket’s Superman"
-],
-
-"Ben Stokes": [
-  "Cricketer",
-  "English all-rounder",
-  "Born in New Zealand",
-  "Known for comebacks",
-  "2019 WC hero",
-  "Played for Rajasthan Royals",
-  "Aggressive leader",
-  "Ashes fighter",
-  "Hits sixes under pressure",
-  "England’s warrior"
-],
-
-"Rohit Sharma": [
-  "Cricketer",
-  "Indian opener",
-  "Known for elegance",
-  "Captain of India (2023)",
-  "Hit double centuries",
-  "Plays for Mumbai Indians",
-  "Nicknamed Hitman",
-  "Loves sixes",
-  "Calm personality",
-  "World Cup giant"
-],
-
-"Babar Azam": [
-  "Cricketer",
-  "Pakistani batsman",
-  "Stylish stroke player",
-  "Captain of Pakistan",
-  "Compared to Kohli",
-  "Plays for Peshawar Zalmi",
-  "Consistent performer",
-  "Calm under pressure",
-  "From Lahore",
-  "Pakistan’s best"
-],
-
-// 🎬 Bollywood Icons
-
-"Shah Rukh Khan": [
-  "Actor",
-  "Indian superstar",
-  "Known for romantic roles",
-  "Started from TV",
-  "Owns a cricket team",
-  "Famous pose with open arms",
-  "Lives in Mannat",
-  "Called King Khan",
-  "Worked with Kajol",
-  "SRK forever"
-],
-
-"Salman Khan": [
-  "Actor",
-  "Bollywood Bhai",
-  "Action hero",
-  "Host of Bigg Boss",
-  "Owns 'Being Human'",
-  "Never married",
-  "Has loyal fanbase",
-  "Famous for shirtless scenes",
-  "Starred in Wanted, Sultan",
-  "Eid release king"
-],
-
-"Deepika Padukone": [
-  "Actress",
-  "Indian film star",
-  "From Bangalore",
-  "Married to Ranveer Singh",
-  "Started as model",
-  "Debut opposite SRK",
-  "Starred in Padmaavat",
-  "Known for dimples",
-  "One of India’s top actresses",
-  "Queen of Bollywood"
-],
-
-"Ranbir Kapoor": [
-  "Actor",
-  "From Bollywood family",
-  "Charming personality",
-  "Married to Alia Bhatt",
-  "Starred in Rockstar",
-  "Played Sanjay Dutt in biopic",
-  "Known for romantic films",
-  "Son of Rishi Kapoor",
-  "Loved by youth",
-  "Bollywood prince"
-],
-
-"Alia Bhatt": [
-  "Actress",
-  "Bollywood star",
-  "Started young",
-  "Daughter of Mahesh Bhatt",
-  "Married to Ranbir Kapoor",
-  "Starred in Raazi and Gully Boy",
-  "Won multiple Filmfares",
-  "Singer as well",
-  "Has British roots",
-  "Modern queen"
-],
-
-// 🎤 Pop & Hollywood
-
-"Taylor Swift": [
-  "Singer",
-  "American female artist",
-  "Writes her own songs",
-  "Known for breakup lyrics",
-  "Started in country music",
-  "Massive world tours",
-  "Won multiple Grammys",
-  "Famous for ‘Eras Tour’",
-  "Swifties adore her",
-  "Pop icon"
-],
-
-"Justin Bieber": [
-  "Singer",
-  "Canadian male artist",
-  "Discovered on YouTube",
-  "Started as teen idol",
-  "Married to Hailey",
-  "Known for ‘Baby’",
-  "Collaborated with Ed Sheeran",
-  "Has tattoos",
-  "Changed musical style",
-  "Pop phenomenon"
-],
-
-"Selena Gomez": [
-  "Singer and actress",
-  "From America",
-  "Disney fame",
-  "Best friends with Taylor Swift",
-  "Starred in ‘Wizards of Waverly Place’",
-  "Launched Rare Beauty",
-  "Singer of ‘Calm Down’ collab",
-  "Ex of Justin Bieber",
-  "Mental health advocate",
-  "Pop sweetheart"
-],
-
-"The Weeknd": [
-  "Singer",
-  "Canadian male artist",
-  "Known for unique voice",
-  "Created ‘Blinding Lights’",
-  "Real name Abel Tesfaye",
-  "Dark R&B style",
-  "Performs with red jacket look",
-  "Super Bowl performer",
-  "Massive fanbase",
-  "XO legend"
-],
-
-"Billie Eilish": [
-  "Singer",
-  "American artist",
-  "Known for whisper singing",
-  "Won Grammy for Album of the Year",
-  "Brother is Finneas",
-  "Famous for ‘Bad Guy’",
-  "Unique green hair phase",
-  "Loves baggy clothes",
-  "Pop rebel",
-  "Youngest major Grammy winner"
-],
-
-"Harry Styles": [
-  "Singer",
-  "British male artist",
-  "Ex-member of One Direction",
-  "Solo hit ‘As It Was’",
-  "Known for gender-fluid fashion",
-  "Actor too",
-  "Won Grammy for Album of the Year",
-  "From England",
-  "Massive fan following",
-  "Stylish icon"
-],
-
-"Beyonce": [
-  "Singer",
-  "American superstar",
-  "Known for stage presence",
-  "Former Destiny’s Child member",
-  "Married to Jay-Z",
-  "Performer of ‘Halo’",
-  "Multiple Grammy winner",
-  "Queen Bey",
-  "One of most powerful women",
-  "Cultural icon"
-],
-
-// 🏆 Global Sports + Rare Ones
-
-"Usain Bolt": [
-  "Athlete",
-  "Jamaican sprinter",
-  "Fastest man alive",
-  "World record 9.58s",
-  "Known for lightning pose",
-  "Won multiple Olympic golds",
-  "Retired as legend",
-  "Dominated from 2008–2016",
-  "Nickname Lightning Bolt",
-  "Track GOAT"
-],
-
-"Roger Federer": [
-  "Tennis player",
-  "Swiss legend",
-  "Graceful player",
-  "20 Grand Slams",
-  "Known for one-handed backhand",
-  "Rival of Nadal and Djokovic",
-  "Wimbledon hero",
-  "Retired 2022",
-  "Calm personality",
-  "Tennis artist"
-],
-
-"Michael Phelps": [
-  "Swimmer",
-  "American athlete",
-  "Most decorated Olympian",
-  "Won 23 gold medals",
-  "Dominated Beijing 2008",
-  "Specialist in butterfly stroke",
-  "Tall swimmer",
-  "Mental health advocate",
-  "Nicknamed The Fish",
-  "Olympic legend"
-],
-
-"Novak Djokovic": [
-  "Tennis player",
-  "From Serbia",
-  "World No.1 many times",
-  "Rival to Nadal and Federer",
-  "Vegan and flexible",
-  "Known for mental strength",
-  "20+ Grand Slam titles",
-  "Australian Open king",
-  "Perfectionist athlete",
-  "Tennis machine"
-],
-
-"Serena Williams": [
-  "Tennis player",
-  "American female athlete",
-  "23 Grand Slam titles",
-  "Powerful serve",
-  "Sister of Venus",
-  "Known for comebacks",
-  "Mother and champion",
-  "Fought for equality",
-  "GOAT of women’s tennis",
-  "Icon of dominance"
-],
-"Lewis Hamilton": [
-  "F1 driver",
-  "British racing legend",
-  "Drives for Mercedes",
-  "Seven-time world champion",
-  "Car number 44",
-  "Known for fashion and activism",
-  "Vegan athlete",
-  "Owns bulldog named Roscoe",
-  "Rivalry with Verstappen",
-  "Speed and style icon"
-],
-
-"Max Verstappen": [
-  "F1 driver",
-  "From the Netherlands",
-  "Red Bull Racing star",
-  "Won three consecutive world titles",
-  "Aggressive driver",
-  "Son of former F1 racer",
-  "Famous number 1 car",
-  "Known for bold overtakes",
-  "Youngest GP winner",
-  "F1’s new king"
-],
-
-"David Beckham": [
-  "Footballer",
-  "English icon",
-  "Played for Manchester United",
-  "Known for free kicks",
-  "Married to Victoria",
-  "Fashion trendsetter",
-  "Golden right foot",
-  "Part owner of Inter Miami",
-  "England captain for years",
-  "Global superstar"
-],
-
-"Karim Benzema": [
-  "Footballer",
-  "French striker",
-  "Played for Real Madrid",
-  "Ballon d’Or 2022 winner",
-  "Known for technical skill",
-  "Converted to Islam",
-  "Played with Ronaldo",
-  "Moved to Saudi Arabia",
-  "Wears number 9",
-  "Calm and composed finisher"
-],
-
-"Zlatan Ibrahimovic": [
-  "Footballer",
-  "Swedish striker",
-  "Known for arrogance and skills",
-  "Played for multiple clubs",
-  "Taekwondo-style goals",
-  "Nicknamed ‘Ibra’",
-  "Famous for one-liners",
-  "Retired in 2023",
-  "Scored 500+ career goals",
-  "Lion mentality"
-],
-
-"Antoine Griezmann": [
-  "Footballer",
-  "French attacker",
-  "Played for Atletico Madrid",
-  "Known for pink hair phase",
-  "Won 2018 World Cup",
-  "Loves Fortnite dances",
-  "Nicknamed Grizi",
-  "Stylish celebrations",
-  "La Liga star",
-  "Versatile forward"
-],
-
-"Son Heung-Min": [
-  "Footballer",
-  "South Korean",
-  "Captain of national team",
-  "Plays for Tottenham",
-  "Premier League Golden Boot winner",
-  "Known for humility",
-  "Military service completed",
-  "Fast and two-footed",
-  "Asian superstar",
-  "Smile assassin"
-],
-
-"Kevin De Bruyne": [
-  "Footballer",
-  "Belgian midfielder",
-  "Plays for Manchester City",
-  "Known for perfect passes",
-  "Ginger-haired playmaker",
-  "Won UCL 2023",
-  "Calm and clinical",
-  "Called ‘KDB’",
-  "Crossing genius",
-  "Brains of Pep’s system"
-],
-
-"Paulo Dybala": [
-  "Footballer",
-  "From Argentina",
-  "Played for Juventus and Roma",
-  "Left-footed attacker",
-  "Nicknamed ‘La Joya’ (The Jewel)",
-  "Known for mask celebration",
-  "Close friend of Messi",
-  "In 2022 World Cup squad",
-  "Stylish dribbler",
-  "Argentinian star"
-],
-
-"Marcus Rashford": [
-  "Footballer",
-  "From England",
-  "Plays for Manchester United",
-  "Campaigns against child hunger",
-  "Known for free kicks",
-  "Fast and technical",
-  "Wears number 10",
-  "Scored in Europa finals",
-  "Humble background",
-  "Hero on and off pitch"
-],
-
-"Virender Sehwag": [
-  "Cricketer",
-  "Indian opener",
-  "Known for fearless batting",
-  "Scored 300+ twice in Tests",
-  "Started every innings with boundary",
-  "From Delhi",
-  "Retired early",
-  "Nicknamed ‘Viru’",
-  "Now a witty commentator",
-  "Sultan of Multan"
-],
-
-"Ravindra Jadeja": [
-  "Cricketer",
-  "Indian all-rounder",
-  "Known for sword celebration",
-  "Plays for CSK",
-  "Brilliant fielder",
-  "From Gujarat",
-  "Nicknamed ‘Sir Jadeja’",
-  "Left-arm spinner",
-  "Match-winner in Tests",
-  "India’s Rockstar"
-],
-
-"Hardik Pandya": [
-  "Cricketer",
-  "Indian all-rounder",
-  "Known for tattoos and bling",
-  "From Gujarat",
-  "Captain of GT in IPL",
-  "Married to model Natasa",
-  "Fast-bowling all-rounder",
-  "Dynamic finisher",
-  "Swag on and off field",
-  "Next-gen star"
-],
-
-"Glenn Maxwell": [
-  "Cricketer",
-  "Australian all-rounder",
-  "Nicknamed ‘The Big Show’",
-  "Explosive hitter",
-  "Played for RCB",
-  "Mental health advocate",
-  "Known for reverse sweeps",
-  "Part-time spinner",
-  "World Cup winner",
-  "Entertainment machine"
-],
-
-"Pat Cummins": [
-  "Cricketer",
-  "Australian captain",
-  "Fast bowler",
-  "Known for pace and line",
-  "Calm leader",
-  "Won WTC 2023",
-  "IPL player for KKR",
-  "Top-ranked bowler",
-  "Economics degree holder",
-  "Silent destroyer"
-],
-
-"Shubman Gill": [
-  "Cricketer",
-  "Indian opener",
-  "From Punjab",
-  "Next-gen superstar",
-  "Elegant strokeplay",
-  "Scored double century in ODIs",
-  "Plays for Gujarat Titans",
-  "Stylish personality",
-  "Nicknamed ‘Prince’",
-  "Future captain material"
-],
-
-"Ricky Ponting": [
-  "Cricketer",
-  "Australian legend",
-  "Former captain",
-  "Aggressive batsman",
-  "Won 3 World Cups",
-  "Fielding master",
-  "Coach post-retirement",
-  "Nicknamed ‘Punter’",
-  "From Tasmania",
-  "Aussie great"
-],
-
-"Chris Gayle": [
-  "Cricketer",
-  "West Indian",
-  "Known as ‘Universe Boss’",
-  "Explosive opener",
-  "Played for RCB and KXIP",
-  "Loved dancing on field",
-  "Six-hitting machine",
-  "Party animal",
-  "Jamaican entertainer",
-  "T20 king"
-],
-
-"Kane Williamson": [
-  "Cricketer",
-  "New Zealand captain",
-  "Known for calmness",
-  "Technically perfect batsman",
-  "Won WTC 2021",
-  "Soft-spoken leader",
-  "Respected globally",
-  "From Tauranga",
-  "Gentleman cricketer",
-  "Steady and solid"
-],
-
-"Yuvraj Singh": [
-  "Cricketer",
-  "Indian legend",
-  "Hit 6 sixes in an over",
-  "2007 and 2011 hero",
-  "Beat cancer",
-  "Stylish left-hander",
-  "From Punjab",
-  "Nicknamed ‘Yuvi’",
-  "Played for multiple IPL teams",
-  "Champion spirit"
-],
-
-"Rafael Nadal": [
-  "Tennis player",
-  "Spanish left-hander",
-  "King of Clay",
-  "22 Grand Slams",
-  "Rival of Federer and Djokovic",
-  "Known for intensity",
-  "From Mallorca",
-  "Olympic gold medalist",
-  "Famous sleeveless shirts",
-  "Fighting spirit"
-],
-
-"Cristiano Ronaldo Jr": [
-  "Footballer",
-  "Son of CR7",
-  "Young talent",
-  "Plays in academy teams",
-  "Already scoring goals",
-  "Mini version of his dad",
-  "Has same celebration",
-  "Seen training with Ronaldo",
-  "Next-gen prodigy",
-  "Future star"
-],
-
-"Tom Cruise": [
-  "Actor",
-  "Hollywood superstar",
-  "Known for Mission Impossible",
-  "Does his own stunts",
-  "Scientology member",
-  "Top Gun hero",
-  "Multiple box-office hits",
-  "Known for smile",
-  "Started in the 1980s",
-  "Action legend"
-],
-
-"Keanu Reeves": [
-  "Actor",
-  "Canadian superstar",
-  "Known for Matrix and John Wick",
-  "Calm and humble personality",
-  "Loves motorcycles",
-  "Fans call him wholesome",
-  "Tragic past",
-  "Nicknamed ‘The Internet’s Boyfriend’",
-  "Lives simply",
-  "Hollywood nice guy"
-],
-
-"Margot Robbie": [
-  "Actress",
-  "Australian",
-  "Played Harley Quinn",
-  "Starred in Barbie",
-  "Blonde and confident",
-  "Known for Wolf of Wall Street",
-  "Producer too",
-  "Married to Tom Ackerley",
-  "Stylish on red carpet",
-  "Hollywood sensation"
-],
-
-"Ryan Reynolds": [
-  "Actor",
-  "Canadian comedian",
-  "Plays Deadpool",
-  "Married to Blake Lively",
-  "Witty humor",
-  "Owns a football club",
-  "Business ventures in gin",
-  "Self-deprecating jokes",
-  "Fan-favorite online",
-  "Hollywood’s funny guy"
-],
-
-"Zendaya": [
-  "Actress and singer",
-  "From the US",
-  "Starred in Euphoria",
-  "Plays MJ in Spider-Man",
-  "Dated co-star Tom Holland",
-  "Former Disney star",
-  "Known for elegance",
-  "Fashion icon",
-  "Multiple Emmy winner",
-  "Gen-Z queen"
-],
-
-"Tom Holland": [
-  "Actor",
-  "British",
-  "Plays Spider-Man",
-  "Dated Zendaya",
-  "Started in Billy Elliot musical",
-  "Marvel superstar",
-  "Acrobatic and fit",
-  "Young and energetic",
-  "Fan favorite",
-  "Web-slinging hero"
-],
-
-"Dwayne Johnson": [
-  "Actor",
-  "Former wrestler",
-  "Known as ‘The Rock’",
-  "Massive physique",
-  "Starred in Jumanji, Fast & Furious",
-  "Motivational speaker",
-  "Bald and bold",
-  "Fitness enthusiast",
-  "Samoan roots",
-  "Global megastar"
-],
-
-"Johnny Depp": [
-  "Actor",
-  "Hollywood legend",
-  "Played Jack Sparrow",
-  "Known for eccentric roles",
-  "Involved in famous trial",
-  "Musician as well",
-  "Fans adore his charm",
-  "Worked with Tim Burton",
-  "Rebel personality",
-  "Pirates of the Caribbean icon"
-],
-
-"Emma Watson": [
-  "Actress",
-  "British",
-  "Known for playing Hermione",
-  "UN Women Ambassador",
-  "Graduated from Brown",
-  "Feminist icon",
-  "Starred in Beauty and the Beast",
-  "Activist for equality",
-  "Elegant personality",
-  "Intelligent star"
-],
-
-"Priyanka Chopra": [
-  "Actress",
-  "Indian global star",
-  "Miss World 2000",
-  "Married to Nick Jonas",
-  "Worked in Hollywood and Bollywood",
-  "Singer as well",
-  "From Bareilly",
-  "Starred in Quantico",
-  "Mother and producer",
-  "Desi girl"
-],
-
-"Nick Jonas": [
-  "Singer and actor",
-  "Member of Jonas Brothers",
-  "Married to Priyanka Chopra",
-  "Started as Disney teen star",
-  "Has diabetes awareness foundation",
-  "Pop-rock performer",
-  "American artist",
-  "Actor in Jumanji",
-  "Youngest Jonas brother",
-  "Charming performer"
-],
-
-"Bill Gates": [
-  "Entrepreneur",
-  "American billionaire",
-  "Co-founder of Microsoft",
-  "Philanthropist",
-  "Divorced in 2021",
-  "Known for glasses and sweaters",
-  "Runs charitable foundation",
-  "Once world’s richest",
-  "Tech visionary",
-  "Microsoft pioneer"
-],
-
-"Elon Musk": [
-  "Entrepreneur",
-  "CEO of multiple companies",
-  "Runs Tesla and SpaceX",
-  "From South Africa",
-  "Known for controversial tweets",
-  "Bought Twitter",
-  "Inventive yet chaotic",
-  "Father of many kids",
-  "Owns X and Neuralink",
-  "Future-focused billionaire"
-],
-
-"Mark Zuckerberg": [
-  "Entrepreneur",
-  "Co-founder of Facebook",
-  "Created it from Harvard dorm",
-  "Now owns Meta",
-  "Robot-like persona meme",
-  "Married to Priscilla Chan",
-  "Loves jiu-jitsu",
-  "Young billionaire",
-  "VR enthusiast",
-  "Tech empire builder"
-],
-
-"Lionel Messi Jr": [
-  "Child celebrity",
-  "Son of Messi",
-  "Argentine origin",
-  "Born in Spain",
-  "Seen at World Cup celebrations",
-  "Football-loving kid",
-  "Plays in Inter Miami academy",
-  "Cute football prodigy",
-  "Mini Messi",
-  "Future legend in making"
-],
-
-"Cillian Murphy": [
-  "Actor",
-  "Irish",
-  "Known for Peaky Blinders",
-  "Played Oppenheimer",
-  "Sharp blue eyes",
-  "Prefers privacy",
-  "Calm and intense",
-  "Stage background",
-  "BAFTA winner",
-  "Serious performer"
-],
-
-"Robert Downey Jr": [
-  "Actor",
-  "Hollywood icon",
-  "Played Iron Man",
-  "Comeback king",
-  "Known for wit and confidence",
-  "Faced addiction early",
-  "Marvel’s pioneer",
-  "Oscar winner 2024",
-  "Sharp humor",
-  "Genius Billionaire Playboy"
-],
-
-"Chris Evans": [
-  "Actor",
-  "Plays Captain America",
-  "From Boston",
-  "Known for kindness",
-  "Marvel heartthrob",
-  "Dog lover",
-  "Hollywood nice guy",
-  "Retired from MCU",
-  "Worked with RDJ and Hemsworth",
-  "Patriotic hero"
-],
-
-"Michael Jordan": [
-  "Basketball player",
-  "American legend",
-  "6x NBA champion",
-  "Chicago Bulls hero",
-  "Air Jordan brand founder",
-  "Known for tongue-out dunk",
-  "Space Jam actor",
-  "GOAT of basketball",
-  "Number 23",
-  "Sports business mogul"
-],
-
-"Kobe Bryant": [
-  "Basketball player",
-  "Late NBA legend",
-  "Played for Lakers",
-  "Known as ‘Mamba’",
-  "5x NBA Champion",
-  "Famous work ethic",
-  "Oscar winner post-retirement",
-  "Died in helicopter crash",
-  "Inspired millions",
-  "Mamba Mentality"
-],
-
-"Stephen Curry": [
-  "Basketball player",
-  "Golden State Warriors star",
-  "Changed NBA with 3-pointers",
-  "Two-time MVP",
-  "Known for smile",
-  "Married to Ayesha",
-  "Devout Christian",
-  "Undersized but dominant",
-  "Revolutionized modern basketball",
-  "Splash Brother"
-],
-
-"Lionel Scaloni": [
-  "Football coach",
-  "Argentinian manager",
-  "Won 2022 World Cup",
-  "Young tactician",
-  "Guided Messi’s glory",
-  "Calm and composed",
-  "Loved by fans",
-  "Started as interim coach",
-  "Master of team unity",
-  "Coach of Champions"
-],
-
-"Pep Guardiola": [
-  "Football coach",
-  "Spanish genius",
-  "Manager of Manchester City",
-  "Known for tiki-taka style",
-  "Won UCL with Barca & City",
-  "Former midfielder",
-  "Philosopher of football",
-  "Passionately animated on sidelines",
-  "Perfectionist tactician",
-  "Modern football mastermind"
-]
-
-
+  const normalizedWord = word.trim().toLowerCase();
+  return normalizedGuess === normalizedWord;
 };
 
 // 🔁 Add more personalities similarly up to 100
