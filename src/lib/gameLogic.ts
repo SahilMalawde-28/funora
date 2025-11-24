@@ -1628,8 +1628,8 @@ const getRandomPowerups = (): WordGuessPowerup[] => {
 export const personalityHints: Record<string, string[]> = {
   // 🎮 Games / Esports / College-ish vibes
 
-  Valorant: [
-    '5v5, but not football',
+  "Valorant": [
+    '5v5 sport',
     'A or B, attack first',
     'Red spike problem',
     '13 is a perfect day',
@@ -1639,7 +1639,7 @@ export const personalityHints: Record<string, string[]> = {
     'Riot aimlab child'
   ],
 
-  Battlegrounds: [
+  "Battlegrounds": [
     'Lobby → plane → chaos',
     'Circle hates campers',
     'Winner eats dinner',
@@ -1650,7 +1650,7 @@ export const personalityHints: Record<string, string[]> = {
     'Loot first, footsteps later'
   ],
 
-  FresherParty: [
+  "FresherParty": [
     'Happens only once per batch',
     'Theme rarely followed',
     'Photos → lifetime leverage',
@@ -1661,7 +1661,7 @@ export const personalityHints: Record<string, string[]> = {
     'Not about academics at all'
   ],
 
-  EnggMaths: [
+  "EnggMaths": [
     'More Greek than English',
     'Integration nightmare arc',
     'Calculator cannot save internals',
@@ -1672,7 +1672,7 @@ export const personalityHints: Record<string, string[]> = {
     'Backlog boss fight'
   ],
 
-  CounterStrike: [
+  "CounterStrike": [
     'Dust never fully settles',
     'Eco round character development',
     'Flash → rush → hope',
@@ -1683,7 +1683,7 @@ export const personalityHints: Record<string, string[]> = {
     'Oldest LAN tradition'
   ],
 
-  LastMinuteSub: [
+  "LastMinuteSub": [
     'We knew the date for weeks',
     'Printer jams on D-day',
     'Copy → edit → panic',
@@ -1694,7 +1694,7 @@ export const personalityHints: Record<string, string[]> = {
     'Cycle repeats next week'
   ],
 
-  RecessTime: [
+  "RecessTime": [
     'Shortest happy interval',
     'Food swapping diplomacy',
     'Benches become beds',
@@ -1705,7 +1705,7 @@ export const personalityHints: Record<string, string[]> = {
     'Never feels enough'
   ],
 
-  MessFood: [
+  "MessFood": [
     'Unlimited rice side quest',
     'Salt DLC missing sometimes',
     'Sunday special debate',
@@ -1716,7 +1716,7 @@ export const personalityHints: Record<string, string[]> = {
     'Menu lies occasionally'
   ],
 
-  GroupStudy: [
+  "GroupStudy": [
     'One studies, rest motivate',
     'Notes become hard currency',
     'Tea fuels productivity illusion',
@@ -1727,7 +1727,7 @@ export const personalityHints: Record<string, string[]> = {
     'Exam tomorrow tradition'
   ],
 
-  LibraryBench: [
+  "LibraryBench": [
     'Silent but fully occupied',
     'Chairs mysteriously reserved',
     'WiFi just enough',
@@ -1736,7 +1736,975 @@ export const personalityHints: Record<string, string[]> = {
     'Books as laptop stands',
     'Nightouts without parties',
     'Aircon lottery tickets'
-  ]
+  ],
+  "Matchmaking": [
+  "Skill issue calculator",
+  "Teammates from four planets",
+  "Ping says goodbye",
+  "Balanced but not balanced",
+  "Win → next lobby punishment",
+  "Smurf boss fight",
+  "Peak comes before fall",
+  "MMR black magic"
+],
+
+"RankPush": [
+  "Sleep? Optional.",
+  "Points matter more than meals",
+  "One loss = emotional damage",
+  "Queue timings unpredictable",
+  "Lobby variance tragedy",
+  "Toxicity resistance test",
+  "Win streak = ego boost",
+  "Promotion anxiety arc"
+],
+
+"HostelNight": [
+  "Noise complaints ignored",
+  "One phone = five DJs",
+  "Maggi at 3am moment",
+  "Roam till guard shouts",
+  "Laughs louder than rules",
+  "UNO turns into war",
+  "Sleep becomes myth",
+  "Core memories spawned"
+],
+
+"PlacementPrep": [
+  "DSA > social life",
+  "Mock test heartbreak",
+  "Resume font debate",
+  "Company forms marathons",
+  "Waitlist emotional saga",
+  "Referral treasure hunt",
+  "LinkedIn brag season",
+  "One offer saves semester"
+],
+
+"LANParty": [
+  "Ethernet supremacy arc",
+  "Zero ping heaven",
+  "Bulk chips ecosystem",
+  "Shouting across room meta",
+  "Five PCs, one extension",
+  "Mousepad disappears",
+  "No one wants support role",
+  "Greatest dopamine rush"
+],
+
+"LabViva": [
+  "Confidence missing module",
+  "Teacher knows you didn't study",
+  "Explain something you never saw",
+  "Random question generator",
+  "Hope is the syllabus",
+  "Answer length = survival chance",
+  "Internal marks negotiation",
+  "Sweating but AC on"
+],
+
+"HotstarLogin": [
+  "Borrowed account culture",
+  "Password shared 8 times",
+  "Someone changes profile name",
+  "Streaming war begins",
+  "OTP guy never responds",
+  "Paused at 98%",
+  "Buffering boss fight",
+  "Who is watching? popup terror"
+],
+
+"PhysicsLab": [
+  "Pendulum → chaos theory",
+  "Light + prism = headache",
+  "Screws missing forever",
+  "Graph never looks correct",
+  "TA says redo",
+  "Equipment older than building",
+  "Zero error always exists",
+  "Readings? Imagination."
+],
+
+"QueueSystem": [
+  "Form line = teleportation",
+  "Backbenchers move first",
+  "Teacher magically appears",
+  "No one knows purpose",
+  "Sudden shuffle meta",
+  "Someone cuts always",
+  "Queue grows sideways",
+  "End never in sight"
+],
+
+"ProxyAttendance": [
+  "Roll call lottery",
+  "Voice mimicry arc",
+  "Cough covers names",
+  "Strength becomes double",
+  "Teacher suspicious always",
+  "One mistake ends dynasty",
+  "Group coordination peak",
+  "Miracle marks saved semester"
+],
+
+"ColdCoffeeRun": [
+  "Café rush hour pain",
+  "Wallet cries softly",
+  "Order number disappears",
+  "Friend steals one sip",
+  "Ice melts too fast",
+  "Delivery time = exam start",
+  "Sugar level gamble",
+  "Worth every rupee"
+],
+
+"FriendCrush": [
+  "Starts as joke",
+  "Long conversations arc",
+  "Reply speed analysis",
+  "Screenshot to friends",
+  "Mixed signals update",
+  "Hope vs reality fight",
+  "Barely visible hints",
+  "Character development maybe"
+],
+
+"ExamStress": [
+  "Syllabus disrespect",
+  "Brain buffer mode",
+  "Sleep schedule corrupted",
+  "Study desk becomes bed",
+  "Random motivation videos",
+  "Pen becomes lucky charm",
+  "Time moves faster",
+  "After exam peace arc"
+],
+
+"BusStand": [
+  "Crowd density undefined",
+  "Every bus except yours",
+  "People sprint suddenly",
+  "Seats become luxury",
+  "Driver doesn’t slow",
+  "Weather decides mood",
+  "Last-minute climb tactic",
+  "Earphones essential item"
+],
+
+"CricketGully": [
+  "Rules change mid-game",
+  "One kid owns the bat",
+  "Six = out or not?",
+  "Windows ultimate danger zone",
+  "Arguing > playing",
+  "Ball lost → game over",
+  "Bowling action questionable",
+  "Legendary street memories"
+],
+
+"LabPartner": [
+  "Workload rarely equal",
+  "One writes, one vibes",
+  "Report stolen from senior",
+  "Blame sharing mechanics",
+  "Last-minute readings scam",
+  "Help me bro ritual",
+  "Low-key telepathy",
+  "Best or worst combo"
+],
+
+"GymBro": [
+  "Protein shake diplomacy",
+  "Mirror more used than weights",
+  "Form police patrolling",
+  "Leg day skipped arc",
+  "Gym crush subplot",
+  "PR attempt tragedy",
+  "Sleeveless season",
+  "Strength > logic"
+],
+
+"LateSubmit": [
+  "Deadline extensions coping",
+  "Submit first, edit later",
+  "Somehow accepted anyway",
+  "File corrupt panic",
+  "PDF rename spam",
+  "Drive link permissions pain",
+  "Teacher sees timestamp",
+  "Miracle marks given"
+],
+
+"TrainJourney": [
+  "Berth sharing treaty",
+  "Tea sellers every minute",
+  "Uncle snores boss level",
+  "Scenery therapy mode",
+  "Chai in steel cups",
+  "Long conversations arc",
+  "Sleeper coach politics",
+  "Full nostalgia DLC"
+],
+
+"CafeStudy": [
+  "Coffee > syllabus",
+  "Laptop + notes aesthetic",
+  "Productivity but not really",
+  "Soft music meta",
+  "Charging war at sockets",
+  "Cute ambience buff",
+  "Bill regret later",
+  "Study + vibe combo"
+],
+
+"ReunionDay": [
+  "Old friends new stories",
+  "Awkward hello ritual",
+  "Nostalgia hits instantly",
+  "Photo spam tradition",
+  "Everyone pretends grown",
+  "Inside jokes revived",
+  "Time feels short",
+  "Real happiness reload"
+],
+
+"NightCanteen": [
+  "Menu never changes",
+  "Tastes better at 2am",
+  "Chatting > eating",
+  "Crowded during exams",
+  "Plates vanish mysteriously",
+  "Lights too bright",
+  "Cash only sometimes",
+  "Comfort place unlocked"
+],
+
+"DuosQueue": [
+  "One carries, one laughs",
+  "Inside comms jokes",
+  "Clutch or choke",
+  "Perfect sync sometimes",
+  "One more game tradition",
+  "Rage → queue again",
+  "Ping excuse meta",
+  "Peak friendship mode"
+],
+
+"TeamCaptain": [
+  "Motivation speech arc",
+  "Strategy nobody follows",
+  "Blamed for everything",
+  "Victory credit stolen",
+  "Toughest decisions",
+  "Last minute formations",
+  "Adrenaline leadership",
+  "Heart of the squad"
+],
+
+"BunkSession": [
+  "Starts as joke",
+  "Becomes group mission",
+  "Plan instantly executed",
+  "Hide from teacher quest",
+  "Food court destination",
+  "Classmate betrayal risk",
+  "Guilt? Maybe later",
+  "Ultimate freedom moment"
+],
+
+"SilentCrush": [
+  "Eye contact economy",
+  "Overthinking industry",
+  "Typing… deleting…",
+  "Heart rate increases",
+  "Friend becomes detective",
+  "Stare but don't stare",
+  "Moments feel cinematic",
+  "Confession? Maybe never"
+],
+
+"VRGaming": [
+  "Reality buffer mode",
+  "Motion sickness boss",
+  "Hands waving nonsense",
+  "Immersion > dignity",
+  "Neighbours confused",
+  "Cable becomes enemy",
+  "Avatar better than real",
+  "Addictive fun experience"
+],
+
+"ClassTopper": [
+  "Notes 2 chapters ahead",
+  "Remembers attendance dates",
+  "Doubts never asked",
+  "Quiet confidence aura",
+  "Laptop stickers aesthetic",
+  "Predicts questions accurately",
+  "Explains better than teacher",
+  "Secretly stressed too"
+],
+
+"HostelCrush": [
+  "Seen once, remembered always",
+  "Water cooler coincidences",
+  "Slow walking suddenly",
+  "Friends tease instantly",
+  "Common room encounters",
+  "Laundry room sparks",
+  "Soft smiles exchange",
+  "Endless what-ifs"
+],
+
+"InternshipDay": [
+  "Laptop but no work",
+  "Meetings more than tasks",
+  "Slack typing fear",
+  "Doing Google-driven tasks",
+  "Pretending productivity",
+  "Office coffee overdose",
+  "Learning on the go",
+  "Offer anxiety arc"
+],
+
+"LostWallet": [
+  "Pockets triple checked",
+  "Memory replay mode",
+  "Panic spikes instantly",
+  "Friends assemble search team",
+  "Found in obvious place",
+  "Relief hugs given",
+  "Mini heart attack",
+  "Never forgotten moment"
+],
+
+"ClassBunkers": [
+  "Attendance cap survivors",
+  "Spotted near canteen",
+  "Never in morning hours",
+  "Legends of proxy",
+  "Laugh louder than lectures",
+  "Group unity unmatched",
+  "Study during finals only",
+  "Chaos but fun"
+],
+
+"RickshawRush": [
+  "Negotiate fare boss fight",
+  "Driver says no often",
+  "Traffic destiny",
+  "Shared ride diplomacy",
+  "Wind therapy moment",
+  "Sudden brake alerts",
+  "Shortcuts unknown",
+  "Peak Indian vibe"
+],
+
+"InternalsWeek": [
+  "Last minute revision festival",
+  "Syllabus never ends",
+  "Random questions spawn",
+  "Pen becomes weapon",
+  "Seat choice luck",
+  "Everyone stressed together",
+  "Marks unpredictable",
+  "Survival saga"
+],
+
+"BackbenchRow": [
+  "Whispers become discussions",
+  "Teacher suspicious gaze",
+  "Jokes every minute",
+  "Phone hidden expertly",
+  "Attendance gamble",
+  "Laugh dealer squad",
+  "Main characters honestly",
+  "Best seat in class"
+],
+
+"StudyBreak": [
+  "1 hour → reels",
+  "Water break = 20 mins",
+  "Snack mission",
+  "Bed gravity strong",
+  "Phone traitor always",
+  "Playlist looping",
+  "Motivation resets",
+  "Studying resumes… maybe"
+],
+
+"SportsFestival": [
+  "Energy unmatched",
+  "Teams forming randomly",
+  "Screaming supporters",
+  "Trophies over pride",
+  "Heat but fun",
+  "Last-minute players",
+  "Photos everywhere",
+  "Memorable weekend"
+],
+
+"MiniProject": [
+  "Started late always",
+  "Group chaos guaranteed",
+  "Google becomes teammate",
+  "One coder, four observers",
+  "Presentation created last",
+  "Demo works magically",
+  "Teacher looks impressed",
+  "Marks saved again"
+],
+
+"MessMenu": [
+  "Rice dominance",
+  "Chapati lifespan unpredictable",
+  "Sunday hype real",
+  "Feedback ignored",
+  "Surprises rarely good",
+  "Sambar embodiment",
+  "Repetition meta",
+  "Still we eat"
+],
+
+"ClassMonitor": [
+  "Collects assignments pain",
+  "Msg spammer professional",
+  "Teacher’s right hand",
+  "Whole class enemy sometimes",
+  "Roll number ritual",
+  "Manages group chats",
+  "Calendar human version",
+  "Underpaid hero"
+],
+
+"NightWalk": [
+  "Peace hits different",
+  "Phone away vibe",
+  "Lights look cinematic",
+  "Deep talks emerge",
+  "Cold breeze bonus",
+  "Random dogs greet",
+  "Mind clears slowly",
+  "Best therapy ever"
+],
+
+"HostelKitchen": [
+  "Plates never enough",
+  "Rice always available",
+  "Late night hunger",
+  "Stove older than building",
+  "Salt missing often",
+  "Tea chemistry experiments",
+  "Shared utensils meta",
+  "Bonding zone"
+],
+
+"SleepParalysis": [
+  "Eyes awake, body not",
+  "Shadow illusions",
+  "Mind screaming silently",
+  "Feels eternal",
+  "Random imagination boss",
+  "Heart races",
+  "Happens unexpectedly",
+  "Horror without ghosts"
+],
+
+"ExamSeating": [
+  "Roll number decides fate",
+  "New neighbors every time",
+  "Invigilator roams",
+  "Answer sheet weight heavy",
+  "Pen clicking orchestra",
+  "Time pressure madness",
+  "Eyes betray occasionally",
+  "Stress concentrated"
+],
+
+"MorningLecture": [
+  "Brain boots slowly",
+  "Teacher full energy",
+  "Slides blur level",
+  "Yawn chain reaction",
+  "Half class absent",
+  "Coffee saver",
+  "Notes half readable",
+  "Survival mode"
+],
+
+"WiFiDrop": [
+  "Just before submission",
+  "Zoom freeze tragedy",
+  "Ping peaks suddenly",
+  "Router reboot ritual",
+  "Running near window meta",
+  "Hotspot emergency",
+  "Friends blame ISP",
+  "Painful experience"
+],
+
+"LostKey": [
+  "Room locked forever",
+  "Friends become detectives",
+  "Duplicate fear",
+  "Bag searched thrice",
+  "Found in pocket later",
+  "Mini meltdown avoided",
+  "Unlocking happiness",
+  "Happens to everyone"
+],
+
+"VivaPanel": [
+  "Three teachers, one you",
+  "Confidence reduced",
+  "Unexpected questions",
+  "Smile becomes weapon",
+  "Slides skipped instantly",
+  "Technical guesswork",
+  "Internal marks prophecy",
+  "Escape finally"
+],
+
+"HostelDog": [
+  "Campus celebrity",
+  "Knows everyone",
+  "Sleeps anywhere",
+  "Food magnet",
+  "Follows groups casually",
+  "Protective sometimes",
+  "Plays without reason",
+  "Pure happiness"
+],
+
+"ForgotAssignment": [
+  "Brain crashed yesterday",
+  "Teacher stares deeply",
+  "Excuses loading",
+  "File at home lie",
+  "Friends panic together",
+  "Grace marks hope",
+  "Next time maybe",
+  "Happens weekly"
+],
+
+"PackedCanteen": [
+  "Zero seats visible",
+  "Queue bending strangely",
+  "Popular dish sold out",
+  "Noise peak hour",
+  "Aircon not enough",
+  "Friends hog table",
+  "Waiting becomes tradition",
+  "Food worth it"
+],
+
+"ReelsAddict": [
+  "1 reel → 50 reels",
+  "Laugh alone silently",
+  "Algorithm knows too much",
+  "Time disappears",
+  "Phone battery dies",
+  "Share spam to friends",
+  "Sound stuck in head",
+  "Productivity evaporates"
+],
+
+"LibraryZone": [
+  "Pin drop silence",
+  "Concentration premium",
+  "Notes mode activated",
+  "Sneezing guilt",
+  "Chairs reserved secretly",
+  "Phone hidden deep",
+  "Brain works here",
+  "Peaceful ecosystem"
+],
+
+"GroupChat": [
+  "Muted since months",
+  "Spam stickers nonstop",
+  "Notes circulation",
+  "Random memes drop",
+  "Important msg ignored",
+  "Admin dictatorship",
+  "Night peak hours",
+  "Chaos yet needed"
+],
+
+"StreakMaintainer": [
+  "Snap every day",
+  "Emoji fire pressure",
+  "One miss = heartbreak",
+  "Hours near deadline",
+  "Friends remind you",
+  "Screenshots forbidden",
+  "Long chain flex",
+  "Self-loyalty test"
+],
+
+"MidnightCravings": [
+  "Fridge empty pain",
+  "Zomato hope fades",
+  "Snacks become feast",
+  "Drink + chips ritual",
+  "Friends join instantly",
+  "Sleep delayed",
+  "Mood instantly lifted",
+  "Best memories form"
+],
+
+"LaptopCharger": [
+  "Missing when needed",
+  "Borrowing culture",
+  "Stretch across room",
+  "Port loose sometimes",
+  "Charging war in class",
+  "Indicator flickers",
+  "Low battery trauma",
+  "Lifesaver device"
+],
+
+"ClassWhisper": [
+  "Starts silent",
+  "Becomes conversation",
+  "Teacher notices maybe",
+  "Friends laugh quietly",
+  "Notes exchanged",
+  "Silent gossip arc",
+  "Risky but fun",
+  "Backbench tradition"
+],
+
+"PresentationDay": [
+  "Slides rushed last night",
+  "Fonts inconsistent",
+  "Images stretched weird",
+  "Team panic session",
+  "One speaker dominates",
+  "Questions unpredictable",
+  "Teacher nods slowly",
+  "Marks saved somehow"
+],
+
+"RainyMorning": [
+  "Umbrella optional pain",
+  "Shoes betray instantly",
+  "Roads become rivers",
+  "Class delay meta",
+  "Hot beverages boosted",
+  "Mood swings",
+  "Cozy vibe unlocked",
+  "Nature DLC installed"
+],
+
+"DCRecharge": [
+  "Wallet screams softly",
+  "Wait in queue ritual",
+  "Paper slips everywhere",
+  "Card works sometimes",
+  "Daily struggle arc",
+  "Staff confuse easily",
+  "Finally recharged",
+  "Happiness on swiping"
+],
+
+"ExamPrayer": [
+  "Promise to study next time",
+  "Unexpected spirituality",
+  "Ask universe for help",
+  "Hope > preparation",
+  "Silent chanting",
+  "Friends join too",
+  "Instant divine connection",
+  "Works sometimes"
+],
+
+"LateNightCoding": [
+  "Syntax errors strike",
+  "Google becomes savior",
+  "Debugging despair arc",
+  "Small wins huge excitement",
+  "Coffee mandatory",
+  "Tabs everywhere",
+  "Success at sunrise",
+  "Peak engineer moment"
+],
+
+"PenaltyShootout": [
+  "Nerves of steel test",
+  "Goalkeeper hero arc",
+  "Fans hold breath",
+  "One miss changes legacy",
+  "Pressure beyond reality",
+  "Crowd goes wild",
+  "History made instantly",
+  "Football's final trial"
+],
+
+"OvertimeMatch": [
+  "Extended hype",
+  "Players exhausted",
+  "Fans louder",
+  "Close finish expected",
+  "Momentum shifts wildly",
+  "Hope returns",
+  "Referee busy",
+  "Legendary moments born"
+],
+
+"ServerShutdown": [
+  "Maintenance surprise",
+  "Logout forcefully",
+  "Players rage instantly",
+  "Work progress lost",
+  "Queue again later",
+  "Admin vanishes",
+  "Discord meltdown",
+  "Peace restored eventually"
+],
+
+"CatOnLaptop": [
+  "Warm keyboard magnet",
+  "Random key presses",
+  "Meeting ruined",
+  "Cute but destructive",
+  "Camera cameo",
+  "Laptop performance drops",
+  "Owners forgive always",
+  "Boss fight of fluff"
+],
+
+"HostelLaundry": [
+  "Machine always busy",
+  "Detergent swap ritual",
+  "Clothes disappear randomly",
+  "Dryer betrayal arc",
+  "Token hunts",
+  "Folded? maybe not",
+  "Friends help sometimes",
+  "Laundry mountain returns"
+],
+
+"BirthdayBash": [
+  "Cake smashing tradition",
+  "Late night celebrations",
+  "Group shouting",
+  "Photos everywhere",
+  "Bumps unavoidable",
+  "Friends emotional",
+  "Campus echoes",
+  "Perfect college memory"
+],
+
+"ExamFear": [
+  "Stomach flips",
+  "Clock ticks louder",
+  "Revision suddenly useless",
+  "Pen feels heavier",
+  "Friends panic loudly",
+  "Teacher expression unknown",
+  "Paper looks alien",
+  "Relief after submission"
+],
+
+"StudyPartner": [
+  "Sync unmatched",
+  "Notes exchanged",
+  "Doubts vanish",
+  "Laughs mid-study",
+  "Better than solo",
+  "Snacks mandatory",
+  "Progress visible",
+  "Exam ace duo"
+],
+
+"MatchScreening": [
+  "Crowded hall vibes",
+  "Shouts echo",
+  "Friends united",
+  "Close match chaos",
+  "Snacks flying",
+  "Team chants",
+  "Heart stopping moments",
+  "Memorable night"
+],
+
+"WeekendTrip": [
+  "Plans born suddenly",
+  "Packing minimal",
+  "Budget jokes",
+  "Bus rides loud",
+  "Photoshoot sessions",
+  "Inside jokes upgraded",
+  "Core memory unlocked",
+  "Return tired but happy"
+],
+
+"BenchTalks": [
+  "Deep topics",
+  "Shallow jokes",
+  "Magic in simplicity",
+  "Friends open up",
+  "Time flies",
+  "Weather adds vibe",
+  "Unexpected wisdom",
+  "Unforgettable chats"
+],
+
+"RandomQuiz": [
+  "Syllabus unknown",
+  "Marks unpredictable",
+  "Guessing meta",
+  "Speed important",
+  "Class shocked",
+  "Toppers smile",
+  "Teacher enjoys chaos",
+  "Memory test surprise"
+],
+
+"SportsMeet": [
+  "Field excitement",
+  "Team jerseys",
+  "Shout support",
+  "Drinks finished early",
+  "Events delayed",
+  "Winners celebrated",
+  "Photos mandatory",
+  "Fun-filled day"
+],
+
+"QuizBuzzer": [
+  "Speed matters most",
+  "Brain switches on",
+  "Team pressure",
+  "Host dramatic",
+  "Audience loud",
+  "Close calls frequent",
+  "Adrenaline spike",
+  "Victory sweet"
+],
+
+"ZeroPeriod": [
+  "Unexpected free time",
+  "Some bunk",
+  "Some nap",
+  "Games start",
+  "Teacher maybe comes",
+  "Music plays",
+  "Talks loud",
+  "Relaxation window"
+],
+
+"AutoStand": [
+  "Drivers negotiate",
+  "Passengers hustle",
+  "Fares unpredictable",
+  "Peak hour chaos",
+  "Routes differ",
+  "Horns nonstop",
+  "Crowds restless",
+  "Daily travel grind"
+],
+
+"MessChocolate": [
+  "Rare appearance",
+  "People rush",
+  "Ending soon",
+  "Bowl empty quick",
+  "Childhood nostalgia",
+  "Weekend delight",
+  "Sweet relief",
+  "Everyone smiles"
+],
+
+"ThrowballMatch": [
+  "High energy",
+  "Quick reflexes",
+  "Team coordination",
+  "Shouts everywhere",
+  "Point wins thrill",
+  "Serve pressure",
+  "Friend rivalry",
+  "Fun chaos"
+],
+
+"NotebookTrade": [
+  "Notes exchanged",
+  "Handwriting struggles",
+  "Pages missing",
+  "Photocopy meta",
+  "Important diagrams",
+  "Friendship strengthened",
+  "Teacher suspects",
+  "Useful before exam"
+],
+
+"HostelTerrace": [
+  "Open sky vibe",
+  "Friend meet-ups",
+  "Deep music sessions",
+  "Cool breeze",
+  "Photo shoots",
+  "Secret chats",
+  "Food sneaked",
+  "Memory space"
+],
+
+"SnackRun": [
+  "Canteen sprint",
+  "Order mix-ups",
+  "Wallet lightens",
+  "Hungry friends waiting",
+  "Smell irresistible",
+  "Bags rustle",
+  "Sharing ritual",
+  "Taste wins"
+],
+
+"LateNightWalk": [
+  "Calm roads",
+  "Stars visible",
+  "Thoughts loud",
+  "Friends talk",
+  "Slow pace",
+  "Cool wind",
+  "Peace peak",
+  "Endless vibe"
+],
+
+"MemeFlood": [
+  "Chats overflow",
+  "Laugh out loud",
+  "Inside references",
+  "Group dying",
+  "Trends shared",
+  "Phones heat up",
+  "Never-ending loop",
+  "Social glue"
+],
+
+"DreamTeam": [
+  "Perfect roles",
+  "Unmatched synergy",
+  "No arguments",
+  "Flawless coordination",
+  "Victory assured",
+  "Inside strategy",
+  "Motivation high",
+  "Legends combined"
+],
+
+"PenaltyKick": [
+  "Pressure peak",
+  "Goalkeeper tense",
+  "Crowd silence",
+  "Run-up anxiety",
+  "Ball strikes",
+  "Heart stops",
+  "Outcome final",
+  "Instant hero"
+]
+
 };
 
 // ==========================
