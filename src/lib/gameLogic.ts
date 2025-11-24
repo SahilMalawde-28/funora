@@ -1585,8 +1585,8 @@ const randIntG = (n: number) => Math.floor(Math.random() * n);
 
 // Decide 2 random non-equal indices for starting revealed letters
 const getTwoPositions = (len: number): [number, number] => {
-  const first = randInt(len);
-  let second = randInt(len);
+  const first = randIntG(len);
+  let second = randIntG(len);
   if (second === first && len > 1) {
     second = (second + 1) % len;
   }
