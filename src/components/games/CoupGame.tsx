@@ -722,9 +722,9 @@ export default function CoupGame({
     // You choose to fake: you lose a card, action is cancelled, challenger safe.
     let s: CoupGameState = { ...gameState };
     addLog(
-      `😈 ${
-        findPlayer(cw.challengedId)?.name ?? "?"
-      } chooses to FAKE and loses a card. Action is cancelled.`
+    `❌ ${
+    findPlayer(cw.challengedId)?.name ?? "?"
+    } loses a card. (Challenge successful)`
     );
 
     s.phase = "choose_influence_to_lose";
