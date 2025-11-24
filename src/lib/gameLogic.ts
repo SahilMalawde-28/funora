@@ -1581,7 +1581,7 @@ export interface WordGuessGameState {
 // ===============
 
 // You already have shuffleC elsewhere; we'll still use a tiny random helper.
-const randInt = (n: number) => Math.floor(Math.random() * n);
+const randIntG = (n: number) => Math.floor(Math.random() * n);
 
 // Decide 2 random non-equal indices for starting revealed letters
 const getTwoPositions = (len: number): [number, number] => {
