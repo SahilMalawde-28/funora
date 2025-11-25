@@ -23,7 +23,7 @@ interface WordGuessGameProps {
   onEndGame: () => void;
 }
 
-// Local mirror of powerup type (to avoid extra imports)
+// Local mirror of powerup type (must match gameLogic)
 type Power =
   | "MISGUIDE"
   | "PEEK"
@@ -45,9 +45,10 @@ export default function WordGuessGame({
 
   const myState = gameState.players[myId];
 
-  // Local grid for editing (so we don't spam Supabase on every keystroke)
+  // Local grid for editing (so we don't spam Supabase)
   const [localGrid, setLocalGrid] = useState<string[]>([]);
-  // Timers
+
+  // Timers (visual only)
   const [powerTimer, setPowerTimer] = useState(10);
   const [lettersTimer, setLettersTimer] = useState(20);
 
@@ -58,24 +59,24 @@ export default function WordGuessGame({
   // Peek powerup – temporarily show another player's grid
   const [peekTargetId, setPeekTargetId] = useState<string | null>(null);
 
-  // LETTER_DROP & OP local reveals
+  // LETTER_DROP & OP local reveals (only for the user)
   const [droppedLetter, setDroppedLetter] = useState<string | null>(null);
   const [opJumble, setOpJumble] = useState<string | null>(null);
 
-  // Keep localGrid synced with server state when gameState/myState changes
+  // Sync localGrid whenever myState or targetWord changes
   useEffect(() => {
     if (!myState) return;
     const wordLen = gameState.targetWord.length;
     const base: string[] = new Array(wordLen).fill("");
 
-    // Copy current server grid letters into local grid
     myState.grid.forEach((ch, idx) => {
       if (ch) base[idx] = ch.toUpperCase();
     });
+
     setLocalGrid(base);
   }, [myState, gameState.targetWord]);
 
-  // POWERUP TIMER (10s visual only)
+  // POWERUP TIMER (10s visual)
   useEffect(() => {
     if (gameState.phase !== "powerup") return;
     setPowerTimer(10);
@@ -91,7 +92,7 @@ export default function WordGuessGame({
     return () => clearInterval(id);
   }, [gameState.phase, gameState.round]);
 
-  // LETTERS TIMER (20s visual only)
+  // LETTERS TIMER (20s visual)
   useEffect(() => {
     if (gameState.phase !== "letters") return;
     setLettersTimer(20);
@@ -125,11 +126,8 @@ export default function WordGuessGame({
   const wordLen = gameState.targetWord.length;
   const targetWord = gameState.targetWord.toUpperCase();
 
-  // Helpers
   const findPlayer = (id: string) =>
     players.find((p) => p.player_id === id) || null;
-
-  const otherPlayers = players.filter((p) => p.player_id !== myId);
 
   const alivePlayersIds = useMemo(
     () =>
@@ -154,8 +152,7 @@ export default function WordGuessGame({
     const newPlayers = { ...gameState.players };
 
     // After every 2 completed rounds, unlock one new correct letter per alive player
-    const shouldUnlock =
-      newRound > 1 && newRound % 2 === 1; // e.g. 3, 5, 7...
+    const shouldUnlock = newRound > 1 && newRound % 2 === 1; // 3,5,7,...
 
     if (shouldUnlock) {
       Object.entries(newPlayers).forEach(([pid, st]) => {
@@ -294,14 +291,13 @@ export default function WordGuessGame({
       if (possibleTargets.length === 1) {
         executeTargetPowerup(p, possibleTargets[0]);
       } else {
-        // Ask user to pick target
         setPendingPower(p);
         setPowerTargetId(null);
       }
       return;
     }
 
-    // Non-target powers
+    // Self powers
     executeSelfPowerup(p);
   };
 
@@ -314,7 +310,6 @@ export default function WordGuessGame({
     }
 
     if (p === "PEEK") {
-      // Just local peek + consume power from me
       const updatedPlayers = {
         ...gameState.players,
         [myId]: {
@@ -336,15 +331,12 @@ export default function WordGuessGame({
 
     if (p === "HINT") {
       const allHints = gameState.hints || [];
-      const current = new Set(myState.hintIndices || []);
+      const currentSet = new Set(myState.hintIndices || []);
       const available: number[] = [];
       for (let i = 0; i < allHints.length; i++) {
-        if (!current.has(i)) available.push(i);
+        if (!currentSet.has(i)) available.push(i);
       }
-      if (available.length === 0) {
-        // nothing new to unlock
-        return;
-      }
+      if (available.length === 0) return;
       const idx =
         available[Math.floor(Math.random() * available.length)];
       const newIndices = [...(myState.hintIndices || []), idx];
@@ -363,7 +355,6 @@ export default function WordGuessGame({
     }
 
     if (p === "LETTER_DROP") {
-      // Reveal a random letter from the word (no position), local only
       const indices = targetWord.split("").map((_, i) => i);
       const idx =
         indices[Math.floor(Math.random() * indices.length)];
@@ -396,7 +387,6 @@ export default function WordGuessGame({
     }
 
     if (p === "OP") {
-      // Show jumbled word locally
       const chars = targetWord.split("");
       for (let i = chars.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -424,11 +414,11 @@ export default function WordGuessGame({
   const handleGridInput = (index: number, value: string) => {
     if (!myAlive) return;
     if (gameState.phase !== "letters") return;
-    if (myState.locked[index]) return; // can't edit locked letters
+    if (myState.locked[index]) return;
 
     const v = value.toUpperCase().replace(/[^A-Z]/g, "");
     const next = [...localGrid];
-    next[index] = v.slice(-1); // only last char
+    next[index] = v.slice(-1); // keep last char
     setLocalGrid(next);
   };
 
@@ -452,7 +442,7 @@ export default function WordGuessGame({
 
       if (inputChar === targetWord[i]) {
         if (misguideActive) {
-          // Correct but misguided → treat as wrong once (no reveal, lose heart)
+          // Correct but misguiding – treat as wrong once
           hearts -= 1;
           misguideActive = false;
           newGrid[i] = null;
@@ -460,12 +450,10 @@ export default function WordGuessGame({
           tempLocal[i] = "";
           setLocalGrid(tempLocal);
         } else {
-          // correct placement
           newGrid[i] = targetWord[i];
           locked[i] = true;
         }
       } else {
-        // wrong placement
         hearts -= 1;
         newGrid[i] = null;
         const tempLocal = [...localGrid];
@@ -475,7 +463,7 @@ export default function WordGuessGame({
     }
 
     if (!placedSomething) {
-      // skip penalty
+      // ❗ Skip penalty: lose 1 heart if you didn't try any letter
       hearts -= 1;
     }
 
@@ -487,7 +475,7 @@ export default function WordGuessGame({
       grid: newGrid,
       locked,
       hearts,
-      misguideActive: false, // consumed if it existed
+      misguideActive: false,
       placedThisRound: true,
       eliminated,
     };
@@ -527,7 +515,7 @@ export default function WordGuessGame({
   };
 
   // ======================
-  // REVEAL / GAME OVER UI
+  // REVEAL UI
   // ======================
 
   if (gameState.phase === "reveal" && gameState.winnerId) {
@@ -568,11 +556,23 @@ export default function WordGuessGame({
   // MAIN IN-GAME UI
   // ======================
 
-  // Hints visible to me (indexes from myState.hintIndices)
-  const myHints =
-    (myState.hintIndices || [])
+  // Hints visible to me
+  // ✅ Guarantee at least ONE hint visible:
+  const allHintsArray: string[] =
+    gameState.hints && gameState.hints.length > 0
+      ? gameState.hints
+      : [];
+
+  let myHints: string[] = [];
+
+  if (myState.hintIndices && myState.hintIndices.length > 0) {
+    myHints = [...myState.hintIndices]
       .sort((a, b) => a - b)
-      .map((idx) => generateWordHint(gameState.targetWord, idx)) || [];
+      .map((idx) => generateWordHint(gameState.targetWord, idx));
+  } else if (allHintsArray.length > 0) {
+    // Fallback: show first global hint if no specific indices yet
+    myHints = [allHintsArray[0]];
+  }
 
   const phaseText =
     gameState.phase === "powerup"
@@ -584,7 +584,8 @@ export default function WordGuessGame({
   const phaseBadge =
     gameState.phase === "powerup" ? "Powerup Phase" : "Letter Phase";
 
-  // render hearts as icons
+  const myPowerups = myState.powerups as Power[];
+
   const renderHearts = (count: number) => {
     const arr = [];
     for (let i = 0; i < count; i++) {
@@ -593,12 +594,10 @@ export default function WordGuessGame({
     return <div className="flex gap-0.5">{arr}</div>;
   };
 
-  const myPowerups = myState.powerups as Power[];
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100 flex flex-col">
       {/* PEEK MODAL */}
-      {peekTargetId && (
+      {peekTargetId && gameState.players[peekTargetId] && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-40 p-3">
           <div className="max-w-md w-full bg-slate-950 rounded-3xl border border-indigo-500/60 p-4 space-y-3">
             <div className="flex items-center gap-2">
@@ -624,7 +623,7 @@ export default function WordGuessGame({
         </div>
       )}
 
-      {/* OP / LETTER DROP small banner */}
+      {/* OP / LETTER DROP banner */}
       {(droppedLetter || opJumble) && (
         <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-30">
           <div className="bg-slate-950/90 border border-indigo-500/60 rounded-2xl px-4 py-2 flex items-center gap-3 text-xs">
@@ -849,7 +848,7 @@ export default function WordGuessGame({
               </div>
               {myHints.length === 0 ? (
                 <p className="text-[11px] text-slate-500">
-                  No hints unlocked yet. Try using the Hint powerup.
+                  No hints unlocked yet.
                 </p>
               ) : (
                 <div className="space-y-1 max-h-32 overflow-y-auto">
