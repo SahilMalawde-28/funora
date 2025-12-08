@@ -1829,7 +1829,7 @@ export const personalityHints: Record<string, string[]> = {
     "Group panic ritual",
     "Peace unlocked later"
   ],
-  "Gymbros": [
+  "Gymbro": [
     "Protein everywhere",
     "Mirror best friend",
     "Sleeveless season",
