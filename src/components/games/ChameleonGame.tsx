@@ -143,12 +143,35 @@ export default function ChamaleonGame({
   };
 
   const getMostVotedPlayerId = () => {
-    const counts = getVoteCounts();
-    const arr = Object.entries(counts);
-    if (arr.length === 0) return null;
-    arr.sort((a, b) => b[1] - a[1]);
-    return arr[0][0];
-  };
+  const counts = getVoteCounts(); // { playerId or null: count }
+
+  // If no votes → no elimination
+  if (Object.keys(counts).length === 0) return null;
+
+  const entries = Object.entries(counts); // [pid, count]
+
+  // Sort by vote count
+  entries.sort((a, b) => b[1] - a[1]);
+
+  const [topId, topCount] = entries[0];
+
+  // Find if tie exists
+  const tied = entries.filter(([_, count]) => count === topCount);
+
+  // 🔸 Rule 1: If tie → eliminate no one
+  if (tied.length > 1) {
+    return null;
+  }
+
+  // 🔸 Rule 2: If highest vote is "skip" (null) → eliminate no one
+  if (topId === "null" || topId === null) {
+    return null;
+  }
+
+  // 🔸 Otherwise this is the eliminated person
+  return topId;
+};
+
 
   const mostVotedPlayerId = getMostVotedPlayerId();
 
