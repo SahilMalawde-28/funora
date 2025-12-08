@@ -134,13 +134,19 @@ export default function ChamaleonGame({
   // ─────────────────────────────────────────────────────
 
   const getVoteCounts = () => {
-    const counts: Record<string, number> = {};
-    Object.entries(gameState.votes).forEach(([pid, voted]) => {
-      if (!voted) return;
+  const counts: Record<string, number> = {};
+
+  Object.entries(gameState.votes).forEach(([pid, voted]) => {
+    if (voted === null) {
+      counts["null"] = (counts["null"] || 0) + 1;
+    } else if (voted) {
       counts[voted] = (counts[voted] || 0) + 1;
-    });
-    return counts;
-  };
+    }
+  });
+
+  return counts;
+};
+
 
   const getMostVotedPlayerId = () => {
   const counts = getVoteCounts(); // { playerId or null: count }
