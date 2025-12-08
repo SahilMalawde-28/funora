@@ -2159,16 +2159,6 @@ export const personalityHints: Record<string, string[]> = {
     "Sleep schedule broken",
     "Snacks mandatory"
   ],
-  "Notebook": [
-    "Study partner",
-    "Handwriting roast",
-    "Doodles everywhere",
-    "Exam lifesaver",
-    "Shared among friends",
-    "Teacher signature fear",
-    "Dog-eared truths",
-    "Lost often"
-  ],
   "Memories": [
     "Stored in chaos",
     "Made accidentally",
