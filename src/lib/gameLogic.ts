@@ -1641,6 +1641,58 @@ export interface WavelengthGameState {
   playerOrder: string[];
 }
 
+export const calculatePlayerScore = (guess: number, target: number): number => {
+  const dist = Math.abs(guess - target);
+
+  if (dist === 0) return 30;
+  if (dist <= 5) return 10;
+  if (dist <= 10) return 5;
+
+  return -10; // >10 away
+};
+
+export const calculateClueGiverBonus = (dist: number): number => {
+  if (dist === 0) return 20;
+  if (dist <= 5) return 5;
+  if (dist <= 10) return 3;
+  return 0;
+};
+
+// When EVERYONE is >10 away → clue giver gets -20
+export const allPlayersVeryWrong = (
+  guesses: Record<string, number>,
+  target: number,
+  clueGiverId: string
+): boolean => {
+  const entries = Object.entries(guesses).filter(
+    ([pid]) => pid !== clueGiverId
+  );
+  if (entries.length === 0) return false;
+
+  return entries.every(([_, g]) => Math.abs(g - target) > 10);
+};
+
+// -----------------------------
+// NEXT ROUND & ROTATION
+// -----------------------------
+export const nextWavelengthRound = (
+  state: WavelengthGameState
+): WavelengthGameState => {
+  const nextIndex =
+    (state.clueGiverIndex + 1) % state.playerOrder.length;
+
+  return {
+    ...state,
+    phase: "clue",
+    clue: "",
+    guesses: {},
+    target: Math.floor(Math.random() * 101),
+    clueGiverIndex: nextIndex,
+    clueGiver: state.playerOrder[nextIndex],
+    round: state.round + 1
+  };
+};
+
 
 // gameLogic/wordGuess.ts
 
