@@ -2259,7 +2259,7 @@ export const initWordGuessGame = (playerIds: string[]): WordGuessGameState => {
     round: 1,
     maxHearts: 10,
     players,
-    winnerId: null
+    winnerId: null,
     lettersTimeUp: false,
 
   };
