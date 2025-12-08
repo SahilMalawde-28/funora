@@ -1809,7 +1809,7 @@ export const personalityHints: Record<string, string[]> = {
     "Form filling marathon",
     "Patience trial"
   ],
-  "CrushDay": [
+  "Crush": [
     "Overthinking Olympics",
     "Eye contact lottery",
     "Typing… deleting…",
