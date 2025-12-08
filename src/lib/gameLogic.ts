@@ -2278,6 +2278,26 @@ export const isGuessCorrect = (word: string, guess: string): boolean =>
 
 // 🔁 Add more personalities similarly up to 100
 
+export interface ChainAnswer {
+  playerId: string;
+  answer: string;
+}
+
+export interface ChainGameState {
+  phase: "answering" | "reveal";
+  topic: string;
+  timePerAnswer: number;
+
+  // Turn order
+  activePlayers: string[];
+  currentPlayerIdx: number;
+
+  // Ordered chain (NOT object)
+  chain: ChainAnswer[];
+
+  // Eliminated players list (for UI)
+  eliminated: string[];
+}
 
 export const initChainGame = (playerIds: string[]): ChainGameState => {
   const topics = [
