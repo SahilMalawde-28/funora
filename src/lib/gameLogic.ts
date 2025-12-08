@@ -1733,6 +1733,8 @@ export interface WordGuessGameState {
   players: Record<string, WordGuessPlayerState>;
   winnerId: string | null;
   category?: string;
+  lettersTimeUp: boolean;
+
 }
 
 // ========================= HELPERS ==========================
