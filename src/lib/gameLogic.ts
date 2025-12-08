@@ -1959,7 +1959,7 @@ export const personalityHints: Record<string, string[]> = {
     "Hostel protectors",
     "Scary but soft"
   ],
-  "WiFiness": [
+  "WiFiless": [
     "Mood decider",
     "Ping = destiny",
     "Buffering tragedy",
