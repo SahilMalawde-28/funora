@@ -1999,7 +1999,7 @@ export const personalityHints: Record<string, string[]> = {
     "Sunrise shock",
     "Common student curse"
   ],
-  "MaggiPot": [
+  "Maggi": [
     "2-minute lie",
     "Hostel lifeline",
     "Breakup healer",
