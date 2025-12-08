@@ -1615,6 +1615,32 @@ export const initWavelengthGame = (playerIds: string[]): WavelengthGameState => 
   };
 };
 
+export interface WavelengthGameState {
+  phase: "clue" | "guessing" | "reveal" | "ended";
+
+  // round info
+  round: number;
+  totalRounds: number;
+
+  // rotating clue-giver
+  clueGiver: string;           // player_id
+  clueGiverIndex: number;
+
+  // clue + guessing
+  clue: string;
+  target: number;
+  guesses: Record<string, number>;
+
+  // spectrum
+  spectrum: { left: string; right: string };
+
+  // scoring
+  scores: Record<string, number>; // player_id → points
+
+  // players list stored for round rotation
+  playerOrder: string[];
+}
+
 
 // gameLogic/wordGuess.ts
 
