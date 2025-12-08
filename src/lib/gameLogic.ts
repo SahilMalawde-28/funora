@@ -2260,6 +2260,8 @@ export const initWordGuessGame = (playerIds: string[]): WordGuessGameState => {
     maxHearts: 10,
     players,
     winnerId: null
+    lettersTimeUp: false,
+
   };
 };
 
