@@ -2049,7 +2049,7 @@ export const personalityHints: Record<string, string[]> = {
     "Shared happiness",
     "Finishes quickly"
   ],
-  "Bunkerss": [
+  "Bunkers": [
     "Lecture avoiders",
     "Canteen regulars",
     "Attendance fighters",
