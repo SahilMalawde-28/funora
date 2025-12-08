@@ -1769,7 +1769,7 @@ export const personalityHints: Record<string, string[]> = {
     "Tilt queue danger",
     "Riot’s loud child"
   ],
-  "Hosteler": [
+  "Hostelite": [
     "Sleeps at sunrise",
     "Food? Adjust.",
     "Laundry roulette",
