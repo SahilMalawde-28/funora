@@ -124,44 +124,40 @@ export default function WavelengthGame({
   };
 
   // Host: move to next round or final results
-  const handleHostNextRound = () => {
-    if (!isHost) return;
-    if (gameState.phase !== "reveal") return;
+const handleHostNextRound = () => {
+  if (!isHost) return;
+  if (gameState.phase !== "reveal") return;
 
-    if (isLastRound) {
-      // all rounds finished → final scoreboard
-      onUpdateState({
-        phase: "final",
-      });
-      return;
-    }
+  // If game is finished
+  if (gameState.round >= gameState.totalRounds) {
+    onUpdateState({ phase: "final" });
+    return;
+  }
 
-    // next round: new target, same spectrum (simpler + still fun)
-    const nextRound = gameState.round + 1;
-    const newTarget = Math.floor(Math.random() * 100);
+  // NEW SPECTRUM every round
+  const newSpectrum =
+    spectrums[Math.floor(Math.random() * spectrums.length)];
 
-    // rotate clue giver to next player so everyone gets turns
-    const currentIndex = players.findIndex(
-      (p) => p.player_id === gameState.clueGiver
-    );
-    let nextClueGiver = gameState.clueGiver;
-    if (players.length > 0) {
-      const idx = currentIndex >= 0 ? currentIndex : 0;
-      const nextIdx = (idx + 1) % players.length;
-      nextClueGiver = players[nextIdx].player_id;
-    }
+  // NEW target for this spectrum
+  const newTarget = Math.floor(Math.random() * 100);
 
-    onUpdateState({
-      phase: "clue",
-      round: nextRound,
-      target: newTarget,
-      clueGiver: nextClueGiver,
-      clue: "",
-      guesses: {},
-    });
-    setClueInput("");
-    setGuessValue(50);
-  };
+  // rotate clue giver
+  const currentIndex = players.findIndex(
+    (p) => p.player_id === gameState.clueGiver
+  );
+  const nextIdx = currentIndex === -1 ? 0 : (currentIndex + 1) % players.length;
+  const nextClueGiver = players[nextIdx].player_id;
+
+  onUpdateState({
+    phase: "clue",
+    round: gameState.round + 1,
+    spectrum: newSpectrum,        // 👈 NEW SPECTRUM SET HERE
+    target: newTarget,
+    clueGiver: nextClueGiver,
+    clue: "",
+    guesses: {}
+  });
+};
 
   // Host: extend game by one more full cycle of clue-givers
   const handleHostExtendRounds = () => {
