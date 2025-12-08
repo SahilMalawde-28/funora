@@ -218,7 +218,7 @@ const handleHostNextRound = () => {
   if (gameState.phase !== "reveal") return;
 
   // If game is finished
-  if (gameState.round >= gameState.totalRounds) {
+  if (gameState.round >= totalRounds) {
     onUpdateState({ phase: "final" });
     return;
   }
