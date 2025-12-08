@@ -3,6 +3,95 @@ import { Room, Player } from "../../lib/supabase";
 import { WavelengthGameState } from "../../lib/gameLogic";
 import { TrendingUp, Target, Award, Users, Trophy, Zap } from "lucide-react";
 
+const spectrums = [
+    // 🔥 Temperature / Intensity
+    { left: '❄️ Freezing Cold', right: '🔥 Burning Hot' },
+    { left: '🌧️ Mild', right: '🌪️ Extreme' },
+
+    // 😂 Humor / Fun
+    { left: '😐 Boring', right: '🤣 Hilarious' },
+    { left: '🥱 Dry Joke', right: '😂 Killer Joke' },
+
+    // 😇 Morality
+    { left: '😇 Innocent', right: '😈 Evil' },
+    { left: '🧘‍♂️ Peaceful', right: '💥 Chaotic' },
+
+    // 🐌 Speed / Energy
+    { left: '🐌 Slow', right: '⚡ Fast' },
+    { left: '😴 Low Energy', right: '🚀 Hyperactive' },
+
+    // 🤓 Vibe
+    { left: '🤓 Nerdy', right: '😎 Cool' },
+    { left: '🫥 Forgettable', right: '🌟 Iconic' },
+
+    // 💼 Risk / Danger
+    { left: '🪵 Safe', right: '🧨 Risky' },
+    { left: '🕊️ Peace', right: '⚔️ War' },
+
+    // 💰 Value / Quality
+    { left: '🪙 Cheap', right: '💎 Premium' },
+    { left: '🤢 Bad Quality', right: '👌 Top Quality' },
+
+    // 💀 Fear
+    { left: '🙂 Not Scary', right: '👻 Terrifying' },
+    { left: '😌 Comfortable', right: '😱 Nightmare Fuel' },
+
+    // 🎉 Social Competence
+    { left: '🙃 Awkward', right: '🕺 Charismatic' },
+    { left: '🤐 Quiet', right: '🎤 Loud' },
+
+    // 📚 Knowledge
+    { left: '🧒 Beginner', right: '🧙‍♂️ Expert' },
+    { left: '📕 Ignorant', right: '📚 Knowledgeable' },
+
+    // 🔥 Popularity / Trend
+    { left: '🧓 Outdated', right: '⚡ Trendy' },
+    { left: '📉 Underrated', right: '📈 Overhyped' },
+
+    // 🍕 Food Taste
+    { left: '🤮 Terrible', right: '🤤 Delicious' },
+    { left: '🌶️ Mild', right: '🥵 Spicy' },
+
+    // 🎭 Drama
+    { left: '🙂 Low Drama', right: '🎭 High Drama' },
+
+    // ❤️ Romance
+    { left: '💔 Not Romantic', right: '🥰 Extremely Romantic' },
+
+    // 🧠 Intelligence Scale
+    { left: '🤪 Dumb Move', right: '🧠 Galaxy Brain Move' },
+
+    // 🧹 Cleanliness
+    { left: '🗑️ Messy', right: '✨ Immaculate' },
+
+    // 💪 Strength
+    { left: '🪶 Weak', right: '🏋️ Strong' },
+
+    // 🎮 Skill / Difficulty
+    { left: '🍼 Very Easy', right: '🔪 Impossible' },
+
+    // 💬 Conversation Type
+    { left: '🤫 Serious', right: '🤣 Chaotic' },
+
+    // 🎶 Music Taste
+    { left: '🤢 Bad Taste', right: '🎶 Elite Taste' },
+
+    // 🌍 Size / Scale
+    { left: '🪱 Tiny', right: '🌋 Massive' },
+
+    // 📺 Entertainment
+    { left: '😴 Snoozefest', right: '🔥 Banger' },
+
+    // 💼 Workload
+    { left: '🛀 Light Work', right: '⚙️ Overload' },
+
+    // 🚗 Speed
+    { left: '🐢 Slow Motion', right: '🚗💨 Lightning Fast' },
+
+    // 💥 Impact
+    { left: '🧊 Cold Take', right: '🔥 Hot Take' },
+  ];
+
 interface WavelengthGameProps {
   room: Room;
   players: Player[];
