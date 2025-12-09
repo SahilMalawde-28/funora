@@ -9,6 +9,14 @@ export const generateRoomCode = (): string => {
   return code;
 };
 
+export async function sendEmoji(roomId: string, emoji: string) {
+  await supabase.from("emoji_events").insert({
+    room_id: roomId,
+    emoji
+  });
+}
+
+
 export const createRoom = async (hostId: string) => {
   const code = generateRoomCode();
   const { data, error } = await supabase
