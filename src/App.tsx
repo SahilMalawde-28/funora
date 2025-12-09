@@ -209,6 +209,29 @@ function App() {
     }
   };
 
+  // EMOJI LISTENER
+const emojiChannel = supabase
+  .channel(`emoji-${room.id}`)
+  .on(
+    'postgres_changes',
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'emoji_events',
+      filter: `room_id=eq.${room.id}`
+    },
+    (payload) => {
+      const emoji = payload.new.emoji;
+      triggerEmojiBurst(emoji);
+    }
+  )
+  .subscribe();
+
+return () => {
+  supabase.removeChannel(emojiChannel);
+};
+
+
   const handleJoinRoom = async (code: string, name: string, avatar: string) => {
     setLoading(true);
     try {
