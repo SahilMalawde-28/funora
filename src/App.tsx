@@ -102,32 +102,44 @@ function App() {
 
     // 🔥 Subscribe to players joining/leaving
     const playersSubscription = supabase
-      .channel(`players-room-${room.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'players',
-          filter: `room_id=eq.${room.id}`,
-        },
-        async () => {
-          const updatedPlayers = await getPlayers(room.id);
-          setPlayers(updatedPlayers);
+  .channel(`players-room-${room.id}`)
+  .on(
+    'postgres_changes',
+    {
+      event: '*',
+      schema: 'public',
+      table: 'players',
+      filter: `room_id=eq.${room.id}`,
+    },
+    async (payload) => {
+      const updatedPlayers = await getPlayers(room.id);
+      setPlayers(updatedPlayers);
 
-          // ⭐ If THIS player is no longer in the players list → leave room
-          if (currentPlayer) {
-            const stillHere = updatedPlayers.some(
-              (p) => p.player_id === currentPlayer.player_id
-            );
-            if (!stillHere) {
-              // This means we were removed (or kicked) from DB by someone else
-              await handleLeave();
-            }
+      // 1️⃣ If *this* client was removed → leave
+      if (currentPlayer && !updatedPlayers.some(p => p.player_id === currentPlayer.player_id)) {
+        await handleLeave();
+        return;
+      }
+
+      // 2️⃣ If HOST was removed → assign new host
+      if (room && payload.eventType === "DELETE") {
+        const removedId = payload.old.player_id;
+
+        if (removedId === room.host_id) {
+          if (updatedPlayers.length > 0) {
+            const newHost = updatedPlayers[0].player_id;
+
+            await supabase
+              .from("rooms")
+              .update({ host_id: newHost })
+              .eq("id", room.id);
           }
         }
-      )
-      .subscribe();
+      }
+    }
+  )
+  .subscribe();
+
 
     // 🔥 Subscribe to room updates (game start / end etc.)
     const roomSubscription = supabase
