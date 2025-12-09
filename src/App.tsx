@@ -31,6 +31,12 @@ import CoupGame from './components/games/CoupGame';
 
 function App() {
   // Local anonymous identity for this browser tab
+  // 🔥 Emoji Events System
+const [emojiEvents, setEmojiEvents] = useState<{ id: string; emoji: string }[]>([]);
+const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+const EMOJI_LIST = ["😂","💀","😡","😎","😭","🔥","🤯","✨","🤡","🙌","🎉","😱","❤️","🫡","🧠"];
+
   const [playerId] = useState(
     () => `player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
   );
@@ -209,28 +215,7 @@ function App() {
     }
   };
 
-  // EMOJI LISTENER
-const emojiChannel = supabase
-  .channel(`emoji-${room.id}`)
-  .on(
-    'postgres_changes',
-    {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'emoji_events',
-      filter: `room_id=eq.${room.id}`
-    },
-    (payload) => {
-      const emoji = payload.new.emoji;
-      triggerEmojiBurst(emoji);
-    }
-  )
-  .subscribe();
-
-return () => {
-  supabase.removeChannel(emojiChannel);
-};
-
+  
 
   const handleJoinRoom = async (code: string, name: string, avatar: string) => {
     setLoading(true);
