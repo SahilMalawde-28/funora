@@ -1,4 +1,4 @@
-import { Users, Copy, Play, LogOut, RotateCw } from 'lucide-react';
+import { Users, Copy, Play, LogOut, RotateCw, Crown } from 'lucide-react';
 import { Room, Player } from '../lib/supabase';
 import { GAMES } from '../lib/gameLogic';
 
@@ -11,7 +11,14 @@ interface LobbyProps {
   hasPlayedGame?: boolean;
 }
 
-export default function Lobby({ room, players, currentPlayer, onStartGame, onLeave, hasPlayedGame }: LobbyProps) {
+export default function Lobby({
+  room,
+  players,
+  currentPlayer,
+  onStartGame,
+  onLeave,
+  hasPlayedGame
+}: LobbyProps) {
   const isHost = currentPlayer.player_id === room.host_id;
 
   const copyCode = () => {
@@ -20,71 +27,86 @@ export default function Lobby({ room, players, currentPlayer, onStartGame, onLea
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 p-4">
-      <div className="max-w-4xl mx-auto space-y-6 py-8">
-        <div className="bg-white rounded-3xl shadow-xl p-8 space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Users className="w-8 h-8 text-blue-500" />
-              <div>
-                <h1 className="text-3xl font-black text-gray-800">Game Lobby</h1>
-                <p className="text-gray-500">Waiting for players...</p>
-              </div>
-            </div>
-            <button
-              onClick={onLeave}
-              className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors font-semibold"
-            >
-              <LogOut className="w-4 h-4" />
-              Leave
-            </button>
-          </div>
+    <div className="w-full px-4 py-6">
+      <div className="max-w-5xl mx-auto space-y-10">
 
-          <div className="flex items-center justify-center gap-4 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-2xl p-6">
+        {/* HEADER */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Users className="w-8 h-8 text-indigo-600" />
             <div>
-              <p className="text-sm text-gray-600 font-semibold mb-1">Room Code</p>
-              <p className="text-4xl font-black text-gray-800 tracking-widest">{room.code}</p>
+              <h1 className="text-3xl font-black text-gray-800">
+                Lobby
+              </h1>
+              <p className="text-sm text-gray-500">
+                Waiting for players to join…
+              </p>
             </div>
-            <button
-              onClick={copyCode}
-              className="p-3 bg-white rounded-xl hover:bg-gray-50 transition-colors shadow-lg"
-            >
-              <Copy className="w-6 h-6 text-blue-500" />
-            </button>
           </div>
 
+          <button
+            onClick={onLeave}
+            className="px-4 py-2 text-red-600 bg-red-50 rounded-xl hover:bg-red-100 flex items-center gap-2 font-semibold"
+          >
+            <LogOut className="w-4 h-4" /> Leave
+          </button>
+        </div>
+
+        {/* ROOM CODE */}
+        <div className="bg-white shadow-lg rounded-2xl p-6 border border-gray-200 flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-gray-800 mb-4">
-              Players ({players.length})
-            </h2>
-            <div className="grid grid-cols-2 gap-3">
-              {players.map((player) => (
-                <div
-                  key={player.id}
-                  className={`flex items-center gap-3 p-4 rounded-xl transition-all ${
-                    player.player_id === currentPlayer.player_id
-                      ? 'bg-gradient-to-r from-blue-100 to-cyan-100 ring-2 ring-blue-500'
-                      : 'bg-gray-50'
+            <p className="text-sm font-semibold text-gray-500">Room Code</p>
+            <p className="text-4xl font-black tracking-widest text-gray-800">{room.code}</p>
+          </div>
+
+          <button
+            onClick={copyCode}
+            className="p-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 shadow transition"
+          >
+            <Copy className="w-6 h-6 text-indigo-600" />
+          </button>
+        </div>
+
+        {/* PLAYERS GRID */}
+        <div className="bg-white shadow-lg rounded-2xl p-6 border border-gray-200">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">
+            Players ({players.length})
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {players.map((p) => (
+              <div
+                key={p.id}
+                className={`flex items-center gap-3 p-4 rounded-xl border transition
+                  ${
+                    p.player_id === currentPlayer.player_id
+                      ? 'border-indigo-400 bg-indigo-50/50'
+                      : 'border-gray-200 bg-gray-50'
                   }`}
-                >
-                  <span className="text-3xl">{player.avatar}</span>
-                  <div className="flex-1">
-                    <p className="font-bold text-gray-800">{player.name}</p>
-                    {player.player_id === room.host_id && (
-                      <p className="text-xs text-blue-600 font-semibold">HOST</p>
-                    )}
-                  </div>
-                  {player.is_active && (
-                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+              >
+                <div className="text-3xl">{p.avatar}</div>
+
+                <div className="flex-1">
+                  <p className="font-bold text-gray-800">{p.name}</p>
+
+                  {p.player_id === room.host_id && (
+                    <p className="text-xs text-indigo-600 font-semibold flex items-center gap-1">
+                      <Crown className="w-3 h-3" /> HOST
+                    </p>
                   )}
                 </div>
-              ))}
-            </div>
+
+                {p.is_active && (
+                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-xl p-8 space-y-6">
-          <div className="flex items-center justify-between">
+        {/* GAME SELECTOR */}
+        <div className="bg-white shadow-lg rounded-2xl p-6 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-black text-gray-800">Choose a Game</h2>
             {hasPlayedGame && (
               <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 font-bold flex items-center gap-1">
@@ -95,38 +117,46 @@ export default function Lobby({ room, players, currentPlayer, onStartGame, onLea
           </div>
 
           <div className="grid gap-4">
-            {GAMES.map((game) => (
-              <button
-                key={game.id}
-                onClick={() => isHost && onStartGame(game.id)}
-                disabled={!isHost || players.length < game.minPlayers}
-                className={`text-left p-6 rounded-2xl border-2 transition-all ${
-                  isHost && players.length >= game.minPlayers
-                    ? 'border-blue-200 hover:border-blue-500 hover:shadow-lg bg-gradient-to-r from-white to-blue-50 cursor-pointer'
-                    : 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <span className="text-4xl">{game.emoji}</span>
+            {GAMES.map((game) => {
+              const disabled = players.length < game.minPlayers || !isHost;
+              return (
+                <button
+                  key={game.id}
+                  disabled={disabled}
+                  onClick={() => !disabled && onStartGame(game.id)}
+                  className={`p-5 rounded-2xl border-2 text-left transition-all flex items-center gap-4
+                    ${
+                      disabled
+                        ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                        : 'border-indigo-200 hover:border-indigo-500 hover:shadow-lg bg-white'
+                    }
+                  `}
+                >
+                  <div className="text-4xl">{game.emoji}</div>
+
                   <div className="flex-1">
-                    <h3 className="text-xl font-bold text-gray-800 mb-1">{game.name}</h3>
-                    <p className="text-sm text-gray-600">{game.description}</p>
-                    <p className="text-xs text-gray-500 mt-2">Min {game.minPlayers} players</p>
+                    <h3 className="text-lg font-bold text-gray-800">{game.name}</h3>
+                    <p className="text-xs text-gray-500">{game.description}</p>
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      Min {game.minPlayers} players
+                    </p>
                   </div>
-                  {isHost && players.length >= game.minPlayers && (
-                    <Play className="w-6 h-6 text-blue-500" />
+
+                  {!disabled && (
+                    <Play className="w-6 h-6 text-indigo-600" />
                   )}
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
 
           {!isHost && (
-            <p className="text-center text-gray-500 text-sm font-medium">
-              Waiting for host to start the game...
+            <p className="text-center text-gray-500 text-sm mt-4 font-medium">
+              Waiting for host to start a game…
             </p>
           )}
         </div>
+
       </div>
     </div>
   );
