@@ -37,6 +37,18 @@ const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
 const EMOJI_LIST = ["😂","💀","😡","😎","😭","🔥","🤯","✨","🤡","🙌","🎉","😱","❤️","🫡","🧠"];
 
+  const throwEmoji = async (emoji: string) => {
+  if (!room) return;
+
+  await supabase.from("emoji_events").insert({
+    room_id: room.id,
+    emoji,
+  });
+
+  setShowEmojiPicker(false);
+};
+
+
   const [playerId] = useState(
     () => `player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
   );
