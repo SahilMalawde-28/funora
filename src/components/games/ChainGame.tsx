@@ -55,34 +55,39 @@ export default function ChainGame({
   // -------------------------
   // ELIMINATION LOGIC
   // -------------------------
-  const eliminatePlayer = (pid: string, reason: string) => {
-    const newActive = gameState.activePlayers.filter(id => id !== pid);
-    const newEliminated = [...gameState.eliminated, pid];
+ const eliminatePlayer = (pid: string, reason: string) => {
+  // Remove eliminated player
+  const newActive = gameState.activePlayers.filter(id => id !== pid);
 
-    if (newActive.length <= 1) {
-      onUpdateState({
-        activePlayers: newActive,
-        eliminated: newEliminated,
-        phase: "reveal"
-      });
-      return;
-    }
-
-    let idx = gameState.currentPlayerIdx;
-
-    if (pid === currentPlayerId) {
-      if (idx >= newActive.length) idx = 0;
-    } else {
-      idx = newActive.indexOf(currentPlayerId);
-      if (idx === -1) idx = 0;
-    }
-
+  // If only 1 survivor → game ends
+  if (newActive.length <= 1) {
     onUpdateState({
       activePlayers: newActive,
-      eliminated: newEliminated,
-      currentPlayerIdx: idx
+      phase: "reveal"
     });
-  };
+    return;
+  }
+
+  // Fix turn order
+  let nextIdx = gameState.currentPlayerIdx;
+
+  // Case 1: eliminated player WAS the current turn holder → shift turn safely
+  if (pid === currentPlayerId) {
+    if (nextIdx >= newActive.length) nextIdx = 0;
+  }
+
+  // Case 2: eliminated someone else → recalc index of current turn holder
+  else {
+    nextIdx = newActive.indexOf(currentPlayerId);
+    if (nextIdx === -1) nextIdx = 0; // safety
+  }
+
+  onUpdateState({
+    activePlayers: newActive,
+    currentPlayerIdx: nextIdx
+  });
+};
+
 
   // -------------------------
   // VALIDATIONS
