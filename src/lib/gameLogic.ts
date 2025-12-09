@@ -3220,8 +3220,8 @@ const createCoupDeck = (): CoupInfluence[] => {
 };
 
 export const initCoupGame = (playerIds: string[]): CoupGameState => {
-  if (playerIds.length < 3) {
-    throw new Error("Coup needs at least 3 players.");
+  if (playerIds.length < 2) {
+    throw new Error("Coup needs at least 2 players.");
   }
 
   // 1️⃣ Build and shuffle deck
