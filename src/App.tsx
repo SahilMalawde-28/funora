@@ -30,25 +30,10 @@ import ChameleonGame from './components/games/ChameleonGame';
 import CoupGame from './components/games/CoupGame';
 
 function App() {
-  // Local anonymous identity for this browser tab
-  // 🔥 Emoji Events System
-const [emojiEvents, setEmojiEvents] = useState<{ id: string; emoji: string }[]>([]);
-const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-const EMOJI_LIST = ["😂","💀","😡","😎","😭","🔥","🤯","✨","🤡","🙌","🎉","😱","❤️","🫡","🧠"];
-
-  const throwEmoji = async (emoji: string) => {
-  if (!room) return;
-
-  await supabase.from("emoji_events").insert({
-    room_id: room.id,
-    emoji,
-  });
-
-  setShowEmojiPicker(false);
-};
-
-
+  // ======================
+  // PLAYER + ROOM STATE
+  // ======================
   const [playerId] = useState(
     () => `player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
   );
@@ -67,6 +52,28 @@ const EMOJI_LIST = ["😂","💀","😡","😎","😭","🔥","🤯","✨","🤡
   const [loading, setLoading] = useState(false);
   const [hasPlayedGame, setHasPlayedGame] = useState(false);
 
+  // ==================================================
+  // EMOJI THROWER SYSTEM
+  // ==================================================
+  const [emojiEvents, setEmojiEvents] = useState<{ id: string; emoji: string }[]>([]);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  const EMOJI_LIST = ["😂","💀","😡","😎","😭","🔥","🤯","✨","🤡","🙌","🎉","😱","❤️","🫡","🧠"];
+
+  const throwEmoji = async (emoji: string) => {
+    if (!room) return;
+
+    await supabase.from("emoji_events").insert({
+      room_id: room.id,
+      emoji,
+    });
+
+    setShowEmojiPicker(false);
+  };
+
+  // ==================================================
+  // LOAD REAL FRESH ROOM FROM DB (fixes stale host)
+  // ==================================================
   useEffect(() => {
     const loadFreshRoom = async () => {
       if (!room) return;
@@ -81,111 +88,83 @@ const EMOJI_LIST = ["😂","💀","😡","😎","😭","🔥","🤯","✨","🤡
     };
 
     loadFreshRoom();
-  }, []);   // <-- runs once on first load
+  }, []);
 
+  // ==================================================
+  // FETCH PLAYERS
+  // ==================================================
   const fetchPlayers = useCallback(async (roomId: string) => {
     try {
       const data = await getPlayers(roomId);
       setPlayers(data);
     } catch (error) {
-      console.error('Error fetching players:', error);
+      console.error("Error fetching players:", error);
     }
   }, []);
 
-  // -----------------------------
-  // LEAVE ROOM HANDLER
-  // -----------------------------
+  // ==================================================
+  // LEAVE ROOM LOGIC
+  // ==================================================
   const handleLeave = async () => {
     if (!room || !currentPlayer) return;
 
-    // 1️⃣ Remove player from Supabase players table
-    await supabase.from('players').delete().eq('player_id', currentPlayer.player_id);
+    await supabase.from("players").delete().eq("player_id", currentPlayer.player_id);
 
-    // 2️⃣ If host leaves → auto assign new host
+    // Reassign host if leaving host
     if (currentPlayer.player_id === room.host_id) {
-      const { data: remainingPlayers } = await supabase
-        .from('players')
-        .select('*')
-        .eq('room_id', room.id);
+      const { data: remaining } = await supabase
+        .from("players")
+        .select("*")
+        .eq("room_id", room.id);
 
-      if (remainingPlayers && remainingPlayers.length > 0) {
+      if (remaining && remaining.length > 0) {
         await supabase
-          .from('rooms')
-          .update({ host_id: remainingPlayers[0].player_id })
-          .eq('id', room.id);
+          .from("rooms")
+          .update({ host_id: remaining[0].player_id })
+          .eq("id", room.id);
       }
     }
 
-    // 3️⃣ Clear local UI and storage
+    // Clear local UI
     setRoom(null);
     setCurrentPlayer(null);
     setPlayers([]);
-    setHasPlayedGame(false);
-    localStorage.removeItem('funora_room');
-    localStorage.removeItem('funora_player');
+    localStorage.removeItem("funora_room");
+    localStorage.removeItem("funora_player");
   };
 
-  // -----------------------------
-  // REALTIME: PLAYERS + ROOM
-  // -----------------------------
+  // ==================================================
+  // REALTIME LISTENERS (PLAYERS + ROOM)
+  // ==================================================
   useEffect(() => {
     if (!room?.id) return;
 
-    // Initial load
     fetchPlayers(room.id);
 
-    // 🔥 Subscribe to players joining/leaving
+    // realtime player updates
     const playersSubscription = supabase
-  .channel(`players-room-${room.id}`)
-  .on(
-    'postgres_changes',
-    {
-      event: '*',
-      schema: 'public',
-      table: 'players',
-      filter: `room_id=eq.${room.id}`,
-    },
-    async (payload) => {
-      const updatedPlayers = await getPlayers(room.id);
-      setPlayers(updatedPlayers);
+      .channel(`players-room-${room.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "players", filter: `room_id=eq.${room.id}` },
+        async (payload) => {
+          const updated = await getPlayers(room.id);
+          setPlayers(updated);
 
-      // 1️⃣ If *this* client was removed → leave
-      if (currentPlayer && !updatedPlayers.some(p => p.player_id === currentPlayer.player_id)) {
-        await handleLeave();
-        return;
-      }
-
-      // 2️⃣ If HOST was removed → assign new host
-      if (room && payload.eventType === "DELETE") {
-        const removedId = payload.old.player_id;
-
-        if (removedId === room.host_id) {
-          if (updatedPlayers.length > 0) {
-            const newHost = updatedPlayers[0].player_id;
-
-            await supabase
-              .from("rooms")
-              .update({ host_id: newHost })
-              .eq("id", room.id);
+          // if THIS player was kicked → leave
+          if (currentPlayer && !updated.some(p => p.player_id === currentPlayer.player_id)) {
+            handleLeave();
           }
         }
-      }
-    }
-  )
-  .subscribe();
+      )
+      .subscribe();
 
-
-    // 🔥 Subscribe to room updates (game start / end etc.)
+    // realtime room updates
     const roomSubscription = supabase
       .channel(`room-${room.id}`)
       .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'rooms',
-          filter: `id=eq.${room.id}`,
-        },
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rooms", filter: `id=eq.${room.id}` },
         (payload) => {
           if (payload.new) setRoom(payload.new as Room);
         }
@@ -196,58 +175,37 @@ const EMOJI_LIST = ["😂","💀","😡","😎","😭","🔥","🤯","✨","🤡
       supabase.removeChannel(playersSubscription);
       supabase.removeChannel(roomSubscription);
     };
-    // include currentPlayer so stillHere uses latest player_id
   }, [room?.id, currentPlayer, fetchPlayers]);
 
-  // Ensure refetch when room changes (e.g. just joined/created)
+  // ==================================================
+  // REALTIME EMOJI LISTENER
+  // ==================================================
   useEffect(() => {
-    if (room?.id) fetchPlayers(room.id);
-  }, [room?.id, fetchPlayers]);
+    if (!room?.id) return;
 
-  // =======================
-// EMOJI REALTIME LISTENER
-// =======================
-useEffect(() => {
-  if (!room?.id) return;
+    const channel = supabase
+      .channel(`emoji-${room.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "emoji_events", filter: `room_id=eq.${room.id}` },
+        (payload) => {
+          const emoji = payload.new.emoji;
 
-  const channel = supabase
-    .channel(`emoji-${room.id}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "emoji_events",
-        filter: `room_id=eq.${room.id}`,
-      },
-      (payload) => {
-        const emoji = payload.new.emoji;
+          setEmojiEvents(prev => [...prev, { id: payload.new.id, emoji }]);
 
-        // Add floating emoji effect
-        setEmojiEvents((prev) => [
-          ...prev,
-          { id: payload.new.id, emoji }
-        ]);
+          setTimeout(() => {
+            setEmojiEvents(prev => prev.filter(e => e.id !== payload.new.id));
+          }, 3000);
+        }
+      )
+      .subscribe();
 
-        // Remove after animation completes
-        setTimeout(() => {
-          setEmojiEvents((prev) =>
-            prev.filter((e) => e.id !== payload.new.id)
-          );
-        }, 3000);
-      }
-    )
-    .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [room?.id]);
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, [room?.id]);
-
-
-  // -----------------------------
-  // ROOM CREATION / JOIN
-  // -----------------------------
+  // ==================================================
+  // CREATE + JOIN ROOM
+  // ==================================================
   const handleCreateRoom = async (name: string, avatar: string) => {
     setLoading(true);
     try {
@@ -256,19 +214,14 @@ useEffect(() => {
 
       setRoom(newRoom);
       setCurrentPlayer(player);
-      localStorage.setItem('funora_room', JSON.stringify(newRoom));
-      localStorage.setItem('funora_player', JSON.stringify(player));
+      localStorage.setItem("funora_room", JSON.stringify(newRoom));
+      localStorage.setItem("funora_player", JSON.stringify(player));
 
       await fetchPlayers(newRoom.id);
-    } catch (error) {
-      console.error('Error creating room:', error);
-      alert('Failed to create room');
     } finally {
       setLoading(false);
     }
   };
-
-  
 
   const handleJoinRoom = async (code: string, name: string, avatar: string) => {
     setLoading(true);
@@ -277,78 +230,55 @@ useEffect(() => {
 
       setRoom(joinedRoom);
       setCurrentPlayer(player);
-      localStorage.setItem('funora_room', JSON.stringify(joinedRoom));
-      localStorage.setItem('funora_player', JSON.stringify(player));
+      localStorage.setItem("funora_room", JSON.stringify(joinedRoom));
+      localStorage.setItem("funora_player", JSON.stringify(player));
 
       await fetchPlayers(joinedRoom.id);
-    } catch (error) {
-      console.error('Error joining room:', error);
-      throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  // -----------------------------
-  // GAME LIFECYCLE
-  // -----------------------------
+  // ==================================================
+  // GAME START + STATE UPDATE
+  // ==================================================
   const handleStartGame = async (gameId: string) => {
     if (!room || !currentPlayer || currentPlayer.player_id !== room.host_id) return;
 
-    const playerIds = players.map((p) => p.player_id);
-    let gameState: any;
+    const ids = players.map(p => p.player_id);
+    let gameState;
 
-    switch (gameId) {
-      case 'imposter':
-        gameState = initImposterGame(playerIds);
-        break;
-      case 'bluff':
-        gameState = initBluffGame(playerIds);
-        break;
-      case 'team':
-        gameState = initTeamGame(playerIds);
-        break;
-      case 'wavelength':
-        gameState = initWavelengthGame(playerIds);
-        break;
-      case 'wordguess':
-        gameState = initWordGuessGame(playerIds);
-        break;
-      case 'chain':
-        gameState = initChainGame(playerIds);
-        break;
-      case 'boilingWater':
-        gameState = initBoilingWaterGame(playerIds);
-        break;
-      case 'memory':
-        gameState = initMemoryGameState(playerIds);
-        break;
-      case 'herd':
-        gameState = initHerdGame(playerIds);
-        break;
-      case 'cham':
-        gameState = initChameleonGame(playerIds);
-        break;
-      case 'coup':
-        gameState = initCoupGame(playerIds);
-        break;
-      default:
-        return;
-    }
+    const map: Record<string, any> = {
+      imposter: initImposterGame,
+      bluff: initBluffGame,
+      team: initTeamGame,
+      wavelength: initWavelengthGame,
+      wordguess: initWordGuessGame,
+      chain: initChainGame,
+      boilingWater: initBoilingWaterGame,
+      memory: initMemoryGameState,
+      herd: initHerdGame,
+      cham: initChameleonGame,
+      coup: initCoupGame,
+    };
+
+    gameState = map[gameId]?.(ids);
+    if (!gameState) return;
 
     setHasPlayedGame(true);
 
     await updateRoomState(room.id, {
       current_game: gameId,
       game_state: gameState,
-      status: 'playing',
+      status: "playing",
     });
   };
 
   const handleUpdateGameState = async (updates: any) => {
     if (!room) return;
-    const newGameState = { ...room.game_state, ...updates };
-    await updateRoomState(room.id, { game_state: newGameState });
+    await updateRoomState(room.id, {
+      game_state: { ...room.game_state, ...updates },
+    });
   };
 
   const handleEndGame = async () => {
@@ -356,120 +286,71 @@ useEffect(() => {
     await updateRoomState(room.id, {
       current_game: null,
       game_state: {},
-      status: 'lobby',
+      status: "lobby",
     });
   };
 
-  // -----------------------------
-  // RENDER FLOW
-  // -----------------------------
+  // ==================================================
+  // RENDER UI
+  // ==================================================
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 font-semibold">Loading...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        Loading...
       </div>
     );
   }
-  
 
+  // If not in a room → HOME
   if (!room || !currentPlayer) {
     return <Home onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} />;
   }
-  {/* ================================
-     FLOATING EMOJI ANIMATION LAYER
-================================ */}
-<div className="pointer-events-none fixed inset-0 overflow-hidden z-[9999]">
-  {emojiEvents.map((e) => (
-    <div
-      key={e.id}
-      className="absolute text-5xl animate-floating-emoji"
-      style={{
-        left: Math.random() * 80 + "%",
-        top: "100%",
-      }}
-    >
-      {e.emoji}
-    </div>
-  ))}
-</div>
 
+  // ==================================================
+  // MAIN RETURN WRAPPER — contains emoji system + screens
+  // ==================================================
+  return (
+    <>
 
-  if (room.status === 'lobby' || !room.current_game) {
-    return (
-      <Lobby
-        room={room}
-        players={players}
-        currentPlayer={currentPlayer}
-        onStartGame={handleStartGame}
-        onLeave={handleLeave}
-        hasPlayedGame={hasPlayedGame}
-      />
-    );
-  }
-
-  const gameProps = {
-    room,
-    players,
-    currentPlayer,
-    gameState: room.game_state,
-    onUpdateState: handleUpdateGameState,
-    onEndGame: handleEndGame,
-  };
-  {/* EMOJI THROWER BUTTON */}
-{room && (
-  <>
-    <button
-      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-      className="fixed bottom-6 right-6 bg-white shadow-xl rounded-full p-4 text-2xl hover:scale-110 transition z-[10000]"
-    >
-      🎉
-    </button>
-
-    {showEmojiPicker && (
-      <div className="fixed bottom-20 right-6 bg-white p-4 rounded-2xl shadow-xl grid grid-cols-5 gap-3 z-[10000]">
-        {EMOJI_LIST.map((em) => (
-          <button
-            key={em}
-            onClick={() => throwEmoji(em)}
-            className="text-3xl hover:scale-125 transition"
+      {/* FLOATING EMOJI LAYER */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden z-[9999]">
+        {emojiEvents.map((e) => (
+          <div
+            key={e.id}
+            className="absolute text-5xl animate-floating-emoji"
+            style={{ left: Math.random() * 80 + "%", top: "100%" }}
           >
-            {em}
-          </button>
+            {e.emoji}
+          </div>
         ))}
       </div>
-    )}
-  </>
-)}
 
+      {/* EMOJI BUTTON + PICKER */}
+      <>
+        <button
+          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          className="fixed bottom-6 right-6 bg-white shadow-xl rounded-full p-4 text-2xl hover:scale-110 transition z-[10000]"
+        >
+          🎉
+        </button>
 
-  switch (room.current_game) {
-    case 'imposter':
-      return <ImposterGame {...gameProps} />;
-    case 'bluff':
-      return <BluffGame {...gameProps} />;
-    case 'team':
-      return <TeamGame {...gameProps} />;
-    case 'wavelength':
-      return <WavelengthGame {...gameProps} />;
-    case 'wordguess':
-      return <WordGuessGame {...gameProps} />;
-    case 'chain':
-      return <ChainGame {...gameProps} />;
-    case 'boilingWater':
-      return <BoilingGame {...gameProps} />;
-    case 'memory':
-      return <MemoryGame {...gameProps} />;
-    case 'herd':
-      return <HerdGame {...gameProps} />;
-    case 'cham':
-      return <ChameleonGame {...gameProps} />;
-    case 'coup':
-      return <CoupGame {...gameProps} />;
-    default:
-      return (
+        {showEmojiPicker && (
+          <div className="fixed bottom-20 right-6 bg-white p-4 rounded-2xl shadow-xl grid grid-cols-5 gap-3 z-[10000]">
+            {EMOJI_LIST.map((em) => (
+              <button
+                key={em}
+                onClick={() => throwEmoji(em)}
+                className="text-3xl hover:scale-125 transition"
+              >
+                {em}
+              </button>
+            ))}
+          </div>
+        )}
+      </>
+
+      {/* CHOOSE SCREEN */}
+      {room.status === "lobby" || !room.current_game ? (
         <Lobby
           room={room}
           players={players}
@@ -478,8 +359,46 @@ useEffect(() => {
           onLeave={handleLeave}
           hasPlayedGame={hasPlayedGame}
         />
-      );
-  }
+      ) : (
+        (() => {
+          const props = {
+            room,
+            players,
+            currentPlayer,
+            gameState: room.game_state,
+            onUpdateState: handleUpdateGameState,
+            onEndGame: handleEndGame,
+          };
+
+          switch (room.current_game) {
+            case "imposter": return <ImposterGame {...props} />;
+            case "bluff": return <BluffGame {...props} />;
+            case "team": return <TeamGame {...props} />;
+            case "wavelength": return <WavelengthGame {...props} />;
+            case "wordguess": return <WordGuessGame {...props} />;
+            case "chain": return <ChainGame {...props} />;
+            case "boilingWater": return <BoilingGame {...props} />;
+            case "memory": return <MemoryGame {...props} />;
+            case "herd": return <HerdGame {...props} />;
+            case "cham": return <ChameleonGame {...props} />;
+            case "coup": return <CoupGame {...props} />;
+            default:
+              return (
+                <Lobby
+                  room={room}
+                  players={players}
+                  currentPlayer={currentPlayer}
+                  onStartGame={handleStartGame}
+                  onLeave={handleLeave}
+                  hasPlayedGame={hasPlayedGame}
+                />
+              );
+          }
+        })()
+      )}
+
+    </>
+  );
 }
 
 export default App;
