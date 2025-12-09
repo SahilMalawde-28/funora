@@ -192,6 +192,47 @@ const EMOJI_LIST = ["😂","💀","😡","😎","😭","🔥","🤯","✨","🤡
     if (room?.id) fetchPlayers(room.id);
   }, [room?.id, fetchPlayers]);
 
+  // =======================
+// EMOJI REALTIME LISTENER
+// =======================
+useEffect(() => {
+  if (!room?.id) return;
+
+  const channel = supabase
+    .channel(`emoji-${room.id}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "emoji_events",
+        filter: `room_id=eq.${room.id}`,
+      },
+      (payload) => {
+        const emoji = payload.new.emoji;
+
+        // Add floating emoji effect
+        setEmojiEvents((prev) => [
+          ...prev,
+          { id: payload.new.id, emoji }
+        ]);
+
+        // Remove after animation completes
+        setTimeout(() => {
+          setEmojiEvents((prev) =>
+            prev.filter((e) => e.id !== payload.new.id)
+          );
+        }, 3000);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [room?.id]);
+
+
   // -----------------------------
   // ROOM CREATION / JOIN
   // -----------------------------
