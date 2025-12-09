@@ -86,6 +86,60 @@ const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
     return saved ? JSON.parse(saved) : null;
   });
 
+  useEffect(() => {
+  const ensureProfile = async () => {
+    const local = localStorage.getItem("funora_profile");
+
+    if (local) {
+      const parsed = JSON.parse(local);
+
+      // IF local exists but missing DB id → create in Supabase
+      if (!parsed.id) {
+        const { data: created } = await supabase
+          .from("profiles")
+          .insert({
+            name: parsed.name || "New Player",
+            avatar: parsed.avatar || "🙂",
+            games_played: 0,
+            wins: 0,
+            xp: 0,
+          })
+          .select()
+          .single();
+
+        if (created) {
+          localStorage.setItem("funora_profile", JSON.stringify(created));
+          setProfile(created);
+        }
+      } else {
+        setProfile(parsed);
+      }
+    } 
+    else {
+      // No profile at all → create new one
+      const { data: created } = await supabase
+        .from("profiles")
+        .insert({
+          name: "Player",
+          avatar: "🙂",
+          games_played: 0,
+          wins: 0,
+          xp: 0,
+        })
+        .select()
+        .single();
+
+      if (created) {
+        localStorage.setItem("funora_profile", JSON.stringify(created));
+        setProfile(created);
+      }
+    }
+  };
+
+  ensureProfile();
+}, []);
+
+
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(() => {
     const saved = localStorage.getItem('funora_player');
     return saved ? JSON.parse(saved) : null;
