@@ -373,6 +373,11 @@ useEffect(() => {
       </div>
     );
   }
+  
+
+  if (!room || !currentPlayer) {
+    return <Home onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} />;
+  }
   {/* ================================
      FLOATING EMOJI ANIMATION LAYER
 ================================ */}
@@ -391,10 +396,6 @@ useEffect(() => {
   ))}
 </div>
 
-
-  if (!room || !currentPlayer) {
-    return <Home onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} />;
-  }
 
   if (room.status === 'lobby' || !room.current_game) {
     return (
