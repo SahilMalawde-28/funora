@@ -418,6 +418,32 @@ useEffect(() => {
     onUpdateState: handleUpdateGameState,
     onEndGame: handleEndGame,
   };
+  {/* EMOJI THROWER BUTTON */}
+{room && (
+  <>
+    <button
+      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+      className="fixed bottom-6 right-6 bg-white shadow-xl rounded-full p-4 text-2xl hover:scale-110 transition z-[10000]"
+    >
+      🎉
+    </button>
+
+    {showEmojiPicker && (
+      <div className="fixed bottom-20 right-6 bg-white p-4 rounded-2xl shadow-xl grid grid-cols-5 gap-3 z-[10000]">
+        {EMOJI_LIST.map((em) => (
+          <button
+            key={em}
+            onClick={() => throwEmoji(em)}
+            className="text-3xl hover:scale-125 transition"
+          >
+            {em}
+          </button>
+        ))}
+      </div>
+    )}
+  </>
+)}
+
 
   switch (room.current_game) {
     case 'imposter':
