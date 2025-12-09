@@ -49,22 +49,28 @@ function App() {
 
     // 🔥 Subscribe to players joining/leaving (Bolt Supabase style)
     const playersSubscription = supabase
-      .channel(`players-room-${room.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'players',
-          filter: `room_id=eq.${room.id}`,
-        },
-        async () => {
-          await fetchPlayers(room.id);
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') console.log('Listening to player changes...');
-      });
+  .channel(`players-room-${room.id}`)
+  .on(
+    'postgres_changes',
+    {
+      event: '*',
+      schema: 'public',
+      table: 'players',
+      filter: `room_id=eq.${room.id}`,
+    },
+    async () => {
+      const updatedPlayers = await getPlayers(room.id);
+      setPlayers(updatedPlayers);
+
+      // ⭐ If YOU are removed from DB → exit room instantly
+      const stillHere = updatedPlayers.some(p => p.player_id === playerId);
+      if (!stillHere) {
+        handleLeave();
+      }
+    }
+  )
+  .subscribe();
+
 
     // 🔥 Subscribe to room updates (e.g., game start or end)
     const roomSubscription = supabase
