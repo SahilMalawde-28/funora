@@ -287,10 +287,6 @@ const MemoryGame: React.FC<MemoryGameProps> = ({
             <li>Each tile is worth 1 point.</li>
             <li>Reveal your own tiles to score points.</li>
             <li>
-              <b>Paint</b>: Randomly paints a tile your color — but you may lose
-              one of your hidden tiles.
-            </li>
-            <li>
               <b>Stake</b>: Guess and reveal one of your own hidden tiles for
               extra points.
             </li>
