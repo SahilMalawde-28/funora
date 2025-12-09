@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Menu,
   Sparkles,
@@ -18,29 +18,58 @@ interface HomeProps {
 }
 
 export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
+  // -----------------------------
+  // PROFILE LOGIC
+  // -----------------------------
+  const [profile, setProfile] = useState(() => {
+    const saved = localStorage.getItem("funora_profile");
+    return saved
+      ? JSON.parse(saved)
+      : null;
+  });
+
+  const [profileName, setProfileName] = useState(profile?.name || "");
+  const [profileAvatar, setProfileAvatar] = useState(profile?.avatar || AVATARS[0]);
+  const [profileModal, setProfileModal] = useState(false);
+
+  // If no profile → force open profile modal
+  useEffect(() => {
+    if (!profile) setProfileModal(true);
+  }, []);
+
+  const saveProfile = () => {
+    const newProfile = {
+      id: crypto.randomUUID(),
+      name: profileName.trim(),
+      avatar: profileAvatar,
+      created_at: new Date().toISOString()
+    };
+    localStorage.setItem("funora_profile", JSON.stringify(newProfile));
+    setProfile(newProfile);
+    setProfileModal(false);
+  };
+
+  // -----------------------------
+  // EXISTING HOME STATES
+  // -----------------------------
   const [view, setView] = useState<"home" | "create" | "join">("home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const [name, setName] = useState("");
-  const [avatar, setAvatar] = useState(AVATARS[0]);
   const [roomCode, setRoomCode] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleCreate = async () => {
-    if (!name.trim()) return;
+    if (!profile) return alert("Create your profile first!");
     setLoading(true);
-    try {
-      await onCreateRoom(name, avatar);
-    } catch {
-      setLoading(false);
-    }
+    await onCreateRoom(profile.name, profile.avatar);
   };
 
   const handleJoin = async () => {
-    if (!name.trim() || roomCode.length !== 6) return;
+    if (!profile) return alert("Create your profile first!");
+    if (roomCode.length !== 6) return;
     setLoading(true);
     try {
-      await onJoinRoom(roomCode.toUpperCase(), name, avatar);
+      await onJoinRoom(roomCode.toUpperCase(), profile.name, profile.avatar);
     } catch {
       alert("Room not found!");
       setLoading(false);
@@ -51,11 +80,9 @@ export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
     <div className="flex min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
 
       {/* ----------------------------- */}
-      {/* DESKTOP SIDEBAR */}
+      {/* SIDEBAR (DESKTOP) */}
       {/* ----------------------------- */}
       <div className="hidden md:flex flex-col bg-white/80 backdrop-blur-xl shadow-xl border-r border-gray-200 w-20 hover:w-64 transition-all duration-300 group">
-
-        {/* Logo */}
         <div className="p-6 flex items-center gap-3">
           <Sparkles className="w-8 h-8 text-indigo-600" />
           <span className="text-xl font-black text-indigo-700 opacity-0 group-hover:opacity-100 transition">
@@ -63,32 +90,18 @@ export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
           </span>
         </div>
 
-        {/* Menu */}
-        <MenuItem
-          icon={<Users />}
-          label="Join Room"
-          onClick={() => setView("join")}
-        />
-        <MenuItem
-          icon={<Plus />}
-          label="Create Room"
-          onClick={() => setView("create")}
-        />
+        <MenuItem icon={<Users />} label="Join Room" onClick={() => setView("join")} />
+        <MenuItem icon={<Plus />} label="Create Room" onClick={() => setView("create")} />
+        
+        {/* PROFILE BUTTON ENABLED */}
         <MenuItem
           icon={<UserCircle />}
-          label="Profiles"
-          disabled
+          label="Profile"
+          onClick={() => setProfileModal(true)}
         />
-        <MenuItem
-          icon={<Globe2 />}
-          label="Public Rooms"
-          disabled
-        />
-        <MenuItem
-          icon={<Gamepad2 />}
-          label="Party Mode"
-          disabled
-        />
+
+        <MenuItem icon={<Globe2 />} label="Public Rooms" disabled />
+        <MenuItem icon={<Gamepad2 />} label="Party Mode" disabled />
 
         <div className="mt-auto mb-6">
           <MenuItem icon={<LogOut />} label="Logout" disabled />
@@ -96,7 +109,7 @@ export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
       </div>
 
       {/* ----------------------------- */}
-      {/* MOBILE OVERLAY SIDEBAR */}
+      {/* MOBILE SIDEBAR */}
       {/* ----------------------------- */}
       <div className="md:hidden p-4 absolute">
         <button
@@ -110,7 +123,7 @@ export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm md:hidden">
           <div className="absolute left-0 top-0 h-full w-72 bg-white p-6 space-y-6 shadow-xl rounded-r-3xl">
-
+            
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-black text-xl">Menu</h2>
               <button onClick={() => setSidebarOpen(false)}>
@@ -120,43 +133,38 @@ export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
 
             <MobileMenuItem label="Create Room" icon={<Plus />} onClick={() => {setView("create"); setSidebarOpen(false);}} />
             <MobileMenuItem label="Join Room" icon={<Users />} onClick={() => {setView("join"); setSidebarOpen(false);}} />
-            <MobileMenuItem label="Profiles" icon={<UserCircle />} disabled />
+            
+            {/* PROFILE ENABLED */}
+            <MobileMenuItem
+              label="Profile"
+              icon={<UserCircle />}
+              onClick={() => { setProfileModal(true); setSidebarOpen(false); }}
+            />
+
             <MobileMenuItem label="Public Rooms" icon={<Globe2 />} disabled />
             <MobileMenuItem label="Party Mode" icon={<Gamepad2 />} disabled />
-
           </div>
         </div>
       )}
 
       {/* ----------------------------- */}
-      {/* MAIN CONTENT AREA */}
+      {/* MAIN CONTENT */}
       {/* ----------------------------- */}
       <div className="flex-1 flex items-center justify-center p-10">
-
         {view === "home" && <HomeContent setView={setView} />}
-
-        {view === "create" && (
+        {view === "create" && profile && (
           <CreateJoinCard
             title="Create Room"
-            name={name}
-            avatar={avatar}
             loading={loading}
-            setName={setName}
-            setAvatar={setAvatar}
             onSubmit={handleCreate}
             onBack={() => setView("home")}
             buttonText="Create Room"
           />
         )}
-
-        {view === "join" && (
+        {view === "join" && profile && (
           <CreateJoinCard
             title="Join Room"
-            name={name}
-            avatar={avatar}
             loading={loading}
-            setName={setName}
-            setAvatar={setAvatar}
             roomCode={roomCode}
             setRoomCode={setRoomCode}
             onSubmit={handleJoin}
@@ -165,12 +173,69 @@ export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
           />
         )}
       </div>
+
+      {/* ----------------------------- */}
+      {/* PROFILE SETUP MODAL */}
+      {/* ----------------------------- */}
+      {profileModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md space-y-6">
+
+            <h2 className="text-3xl font-black text-gray-800">
+              {profile ? "Edit Profile" : "Create Your Profile"}
+            </h2>
+
+            {/* Name */}
+            <input
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
+              placeholder="Your Name"
+              className="w-full border-2 rounded-xl px-4 py-3"
+            />
+
+            {/* Avatar Picker */}
+            <label className="font-bold text-sm text-gray-600">Choose Avatar</label>
+            <div className="grid grid-cols-8 gap-2">
+              {AVATARS.map((em) => (
+                <button
+                  key={em}
+                  onClick={() => setProfileAvatar(em)}
+                  className={`text-3xl p-2 rounded-xl ${
+                    profileAvatar === em ? "bg-indigo-100 ring-2 ring-indigo-500 scale-110" : "bg-gray-50"
+                  }`}
+                >
+                  {em}
+                </button>
+              ))}
+            </div>
+
+            {/* Save Button */}
+            <button
+              onClick={saveProfile}
+              disabled={!profileName.trim()}
+              className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-4 rounded-xl font-bold hover:scale-105 transition"
+            >
+              Save Profile
+            </button>
+
+            {/* Cancel (only if profile exists) */}
+            {profile && (
+              <button
+                onClick={() => setProfileModal(false)}
+                className="w-full py-3 text-gray-500 font-medium"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ----------------------------------------- */
-/* COMPONENTS */
+/* SAME UI COMPONENTS (UNCHANGED) */
 /* ----------------------------------------- */
 
 function MenuItem({ icon, label, onClick, disabled = false }) {
@@ -211,8 +276,6 @@ function MobileMenuItem({ icon, label, onClick, disabled = false }) {
 function HomeContent({ setView }) {
   return (
     <div className="max-w-3xl mx-auto text-center space-y-10">
-
-      {/* HERO */}
       <div className="space-y-4">
         <Sparkles className="w-20 h-20 text-indigo-600 mx-auto animate-pulse" />
         <h1 className="text-6xl font-black bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
@@ -221,7 +284,6 @@ function HomeContent({ setView }) {
         <p className="text-lg text-gray-600">Party games, made effortless.</p>
       </div>
 
-      {/* ACTION BUTTONS */}
       <div className="flex flex-col gap-4 max-w-md mx-auto">
         <button
           onClick={() => setView("create")}
@@ -238,14 +300,12 @@ function HomeContent({ setView }) {
         </button>
       </div>
 
-      {/* FEATURE CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <FeatureCard title="Profiles" desc="Permanent identity" />
         <FeatureCard title="Groups" desc="Your squads (coming soon)" />
         <FeatureCard title="Public Rooms" desc="Join open lobbies" />
       </div>
 
-      {/* GAMES LIST */}
       <div>
         <p className="text-sm text-gray-500 mb-2">Popular Games</p>
         <div className="flex justify-center flex-wrap gap-3">
@@ -280,10 +340,6 @@ function GamePill({ emoji, label }) {
 
 function CreateJoinCard({
   title,
-  name,
-  avatar,
-  setName,
-  setAvatar,
   roomCode,
   setRoomCode,
   loading,
@@ -300,28 +356,7 @@ function CreateJoinCard({
 
       <h2 className="text-3xl font-black text-gray-800">{title}</h2>
 
-      <label className="block text-sm font-bold">Your Name</label>
-      <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="w-full border-2 rounded-xl px-4 py-3"
-      />
-
-      <label className="block text-sm font-bold">Choose Avatar</label>
-      <div className="grid grid-cols-8 gap-2">
-        {AVATARS.map((em) => (
-          <button
-            key={em}
-            onClick={() => setAvatar(em)}
-            className={`text-3xl p-2 rounded-xl ${
-              avatar === em ? "bg-indigo-100 ring-2 ring-indigo-500 scale-110" : "bg-gray-50"
-            }`}
-          >
-            {em}
-          </button>
-        ))}
-      </div>
-
+      {/* Room code only for Join Room */}
       {setRoomCode && (
         <>
           <label className="block text-sm font-bold">Room Code</label>
@@ -336,7 +371,7 @@ function CreateJoinCard({
 
       <button
         onClick={onSubmit}
-        disabled={loading || !name.trim()}
+        disabled={loading}
         className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-4 rounded-xl font-bold hover:scale-105 transition"
       >
         {loading ? "Loading…" : buttonText}
