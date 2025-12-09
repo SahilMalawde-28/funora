@@ -1,7 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, Room, Player } from './lib/supabase';
 import { createRoom, joinRoom, getPlayers, updateRoomState } from './lib/roomService';
-import { initImposterGame, initBluffGame, initTeamGame, initWavelengthGame, initWordGuessGame, initChainGame, initBoilingWaterGame,initUnoGame,initMemoryGameState,initHerdGame,initChameleonGame,initCoupGame } from './lib/gameLogic';
+import {
+  initImposterGame,
+  initBluffGame,
+  initTeamGame,
+  initWavelengthGame,
+  initWordGuessGame,
+  initChainGame,
+  initBoilingWaterGame,
+  initMemoryGameState,
+  initHerdGame,
+  initChameleonGame,
+  initCoupGame,
+} from './lib/gameLogic';
+
 import Home from './components/Home';
 import Lobby from './components/Lobby';
 import ImposterGame from './components/games/ImposterGame';
@@ -16,17 +29,22 @@ import HerdGame from './components/games/HerdGame';
 import ChameleonGame from './components/games/ChameleonGame';
 import CoupGame from './components/games/CoupGame';
 
-
 function App() {
-  const [playerId] = useState(() => `player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+  // Local anonymous identity for this browser tab
+  const [playerId] = useState(
+    () => `player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  );
+
   const [room, setRoom] = useState<Room | null>(() => {
     const saved = localStorage.getItem('funora_room');
     return saved ? JSON.parse(saved) : null;
   });
+
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(() => {
     const saved = localStorage.getItem('funora_player');
     return saved ? JSON.parse(saved) : null;
   });
+
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasPlayedGame, setHasPlayedGame] = useState(false);
@@ -40,39 +58,78 @@ function App() {
     }
   }, []);
 
-  // ✅ Realtime updates for rooms + players
+  // -----------------------------
+  // LEAVE ROOM HANDLER
+  // -----------------------------
+  const handleLeave = async () => {
+    if (!room || !currentPlayer) return;
+
+    // 1️⃣ Remove player from Supabase players table
+    await supabase.from('players').delete().eq('player_id', currentPlayer.player_id);
+
+    // 2️⃣ If host leaves → auto assign new host
+    if (currentPlayer.player_id === room.host_id) {
+      const { data: remainingPlayers } = await supabase
+        .from('players')
+        .select('*')
+        .eq('room_id', room.id);
+
+      if (remainingPlayers && remainingPlayers.length > 0) {
+        await supabase
+          .from('rooms')
+          .update({ host_id: remainingPlayers[0].player_id })
+          .eq('id', room.id);
+      }
+    }
+
+    // 3️⃣ Clear local UI and storage
+    setRoom(null);
+    setCurrentPlayer(null);
+    setPlayers([]);
+    setHasPlayedGame(false);
+    localStorage.removeItem('funora_room');
+    localStorage.removeItem('funora_player');
+  };
+
+  // -----------------------------
+  // REALTIME: PLAYERS + ROOM
+  // -----------------------------
   useEffect(() => {
     if (!room?.id) return;
 
     // Initial load
     fetchPlayers(room.id);
 
-    // 🔥 Subscribe to players joining/leaving (Bolt Supabase style)
+    // 🔥 Subscribe to players joining/leaving
     const playersSubscription = supabase
-  .channel(`players-room-${room.id}`)
-  .on(
-    'postgres_changes',
-    {
-      event: '*',
-      schema: 'public',
-      table: 'players',
-      filter: `room_id=eq.${room.id}`,
-    },
-    async () => {
-      const updatedPlayers = await getPlayers(room.id);
-      setPlayers(updatedPlayers);
+      .channel(`players-room-${room.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'players',
+          filter: `room_id=eq.${room.id}`,
+        },
+        async () => {
+          const updatedPlayers = await getPlayers(room.id);
+          setPlayers(updatedPlayers);
 
-      // ⭐ If YOU are removed from DB → exit room instantly
-      const stillHere = updatedPlayers.some(p => p.player_id === playerId);
-      if (!stillHere) {
-        handleLeave();
-      }
-    }
-  )
-  .subscribe();
+          // ⭐ If THIS player is no longer in the players list → leave room
+          if (currentPlayer) {
+            const stillHere = updatedPlayers.some(
+              (p) => p.player_id === currentPlayer.player_id
+            );
+            if (!stillHere) {
+              // This means we were removed (or kicked) from DB by someone else
+              await handleLeave();
+            }
+          }
+        }
+      )
+      .subscribe();
 
-
-    // 🔥 Subscribe to room updates (e.g., game start or end)
+    // 🔥 Subscribe to room updates (game start / end etc.)
     const roomSubscription = supabase
       .channel(`room-${room.id}`)
       .on(
@@ -93,22 +150,28 @@ function App() {
       supabase.removeChannel(playersSubscription);
       supabase.removeChannel(roomSubscription);
     };
-  }, [room?.id, fetchPlayers]);
+    // include currentPlayer so stillHere uses latest player_id
+  }, [room?.id, currentPlayer, fetchPlayers]);
 
-  // Ensures refetch if new room is created or joined
+  // Ensure refetch when room changes (e.g. just joined/created)
   useEffect(() => {
     if (room?.id) fetchPlayers(room.id);
   }, [room?.id, fetchPlayers]);
 
+  // -----------------------------
+  // ROOM CREATION / JOIN
+  // -----------------------------
   const handleCreateRoom = async (name: string, avatar: string) => {
     setLoading(true);
     try {
       const newRoom = await createRoom(playerId);
       const { player } = await joinRoom(newRoom.code, playerId, name, avatar);
+
       setRoom(newRoom);
       setCurrentPlayer(player);
       localStorage.setItem('funora_room', JSON.stringify(newRoom));
       localStorage.setItem('funora_player', JSON.stringify(player));
+
       await fetchPlayers(newRoom.id);
     } catch (error) {
       console.error('Error creating room:', error);
@@ -122,10 +185,12 @@ function App() {
     setLoading(true);
     try {
       const { room: joinedRoom, player } = await joinRoom(code, playerId, name, avatar);
+
       setRoom(joinedRoom);
       setCurrentPlayer(player);
       localStorage.setItem('funora_room', JSON.stringify(joinedRoom));
       localStorage.setItem('funora_player', JSON.stringify(player));
+
       await fetchPlayers(joinedRoom.id);
     } catch (error) {
       console.error('Error joining room:', error);
@@ -135,11 +200,14 @@ function App() {
     }
   };
 
+  // -----------------------------
+  // GAME LIFECYCLE
+  // -----------------------------
   const handleStartGame = async (gameId: string) => {
     if (!room || !currentPlayer || currentPlayer.player_id !== room.host_id) return;
 
-    const playerIds = players.map(p => p.player_id);
-    let gameState;
+    const playerIds = players.map((p) => p.player_id);
+    let gameState: any;
 
     switch (gameId) {
       case 'imposter':
@@ -166,7 +234,7 @@ function App() {
       case 'memory':
         gameState = initMemoryGameState(playerIds);
         break;
-        case 'herd':
+      case 'herd':
         gameState = initHerdGame(playerIds);
         break;
       case 'cham':
@@ -178,6 +246,7 @@ function App() {
       default:
         return;
     }
+
     setHasPlayedGame(true);
 
     await updateRoomState(room.id, {
@@ -202,45 +271,14 @@ function App() {
     });
   };
 
- const handleLeave = async () => {
-  if (!room || !currentPlayer) return;
-
-  // 1️⃣ Remove player from Supabase players table
-  await supabase
-    .from("players")
-    .delete()
-    .eq("player_id", currentPlayer.player_id);
-
-  // 2️⃣ If host leaves → auto assign new host
-  if (currentPlayer.player_id === room.host_id) {
-    const { data: remainingPlayers } = await supabase
-      .from("players")
-      .select("*")
-      .eq("room_id", room.id);
-
-    if (remainingPlayers && remainingPlayers.length > 0) {
-      await supabase
-        .from("rooms")
-        .update({ host_id: remainingPlayers[0].player_id })
-        .eq("id", room.id);
-    }
-  }
-
-  // 3️⃣ Clear local UI and storage
-  setRoom(null);
-  setCurrentPlayer(null);
-  setPlayers([]);
-  setHasPlayedGame(false);
-  localStorage.removeItem("funora_room");
-  localStorage.removeItem("funora_player");
-};
-
-
+  // -----------------------------
+  // RENDER FLOW
+  // -----------------------------
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-gray-600 font-semibold">Loading...</p>
         </div>
       </div>
@@ -286,15 +324,15 @@ function App() {
       return <WordGuessGame {...gameProps} />;
     case 'chain':
       return <ChainGame {...gameProps} />;
-    case 'boilingWater':                      // ✅ NEW
+    case 'boilingWater':
       return <BoilingGame {...gameProps} />;
-    case 'memory':                      // ✅ NEW
+    case 'memory':
       return <MemoryGame {...gameProps} />;
-    case 'herd':                      // ✅ NEW
+    case 'herd':
       return <HerdGame {...gameProps} />;
-    case 'cham':                      // ✅ NEW
+    case 'cham':
       return <ChameleonGame {...gameProps} />;
-    case 'coup':                      // ✅ NEW
+    case 'coup':
       return <CoupGame {...gameProps} />;
     default:
       return (
