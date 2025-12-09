@@ -42,7 +42,7 @@ function App() {
   // ==================================================
   // UPDATE PROFILE STATS
   // ==================================================
-  const updateProfileStats = (gameId: string, didWin: boolean = false) => {
+  async const updateProfileStats = (gameId: string, didWin: boolean = false) => {
     if (!profile) return;
 
     const updated = {
