@@ -49,6 +49,22 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [hasPlayedGame, setHasPlayedGame] = useState(false);
 
+  useEffect(() => {
+    const loadFreshRoom = async () => {
+      if (!room) return;
+
+      const { data: fresh } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("id", room.id)
+        .single();
+
+      if (fresh) setRoom(fresh);
+    };
+
+    loadFreshRoom();
+  }, []);   // <-- runs once on first load
+
   const fetchPlayers = useCallback(async (roomId: string) => {
     try {
       const data = await getPlayers(roomId);
