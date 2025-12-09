@@ -242,6 +242,7 @@ const MemoryGame: React.FC<MemoryGameProps> = ({
               curPlayer={curPlayer}
               mePlayer={mePlayer}
               localPreview={localPreview}
+              handlePaint={handlePaint}
               handleStake={handleStake}
               handleView={handleView}
             />
@@ -369,6 +370,7 @@ const AbilitiesBar = ({
   curPlayer,
   mePlayer,
   localPreview,
+  handlePaint,
   handleStake,
   handleView,
 }: any) => (
