@@ -58,9 +58,9 @@ function App() {
     localStorage.setItem("funora_profile", JSON.stringify(updated));
 
     // OPTIONAL: Save to Supabase
-    /*
+    
     await supabase.from("profiles").update(updated).eq("id", profile.id);
-    */
+    
   };
 
   // ======================
