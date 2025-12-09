@@ -42,26 +42,37 @@ function App() {
   // ==================================================
   // UPDATE PROFILE STATS
   // ==================================================
-  const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
-    if (!profile) return;
+const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
+  if (!profile) return;
 
-    const updated = {
-      ...profile,
-      games_played: (profile.games_played || 0) + 1,
-      wins: (profile.wins || 0) + (didWin ? 1 : 0),
-      xp: (profile.xp || 0) + 10,               // give +10 xp per game
-      last_game: gameId,
-      favorite_game: profile.favorite_game || gameId,
-    };
-
-    setProfile(updated);
-    localStorage.setItem("funora_profile", JSON.stringify(updated));
-
-    // OPTIONAL: Save to Supabase
-    
-    await supabase.from("profiles").update(updated).eq("id", profile.id);
-    
+  const updated = {
+    ...profile,
+    games_played: (profile.games_played || 0) + 1,
+    wins: (profile.wins || 0) + (didWin ? 1 : 0),
+    xp: (profile.xp || 0) + 10,
+    last_game: gameId,
+    favorite_game: profile.favorite_game || gameId,
   };
+
+  // Update local instantly
+  localStorage.setItem("funora_profile", JSON.stringify(updated));
+  setProfile(updated);
+
+  // If profile has Supabase ID → update Supabase
+  if (profile.id) {
+    await supabase
+      .from("profiles")
+      .update({
+        games_played: updated.games_played,
+        wins: updated.wins,
+        xp: updated.xp,
+        last_game: gameId,
+        favorite_game: updated.favorite_game,
+      })
+      .eq("id", profile.id);
+  }
+};
+
 
   // ======================
   // PLAYER + ROOM STATE
