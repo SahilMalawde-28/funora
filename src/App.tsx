@@ -196,14 +196,39 @@ function App() {
     });
   };
 
-  const handleLeave = () => {
-    setRoom(null);
-    setCurrentPlayer(null);
-    setPlayers([]);
-    setHasPlayedGame(false);
-    localStorage.removeItem('funora_room');
-    localStorage.removeItem('funora_player');
-  };
+ const handleLeave = async () => {
+  if (!room || !currentPlayer) return;
+
+  // 1️⃣ Remove player from Supabase players table
+  await supabase
+    .from("players")
+    .delete()
+    .eq("player_id", currentPlayer.player_id);
+
+  // 2️⃣ If host leaves → auto assign new host
+  if (currentPlayer.player_id === room.host_id) {
+    const { data: remainingPlayers } = await supabase
+      .from("players")
+      .select("*")
+      .eq("room_id", room.id);
+
+    if (remainingPlayers && remainingPlayers.length > 0) {
+      await supabase
+        .from("rooms")
+        .update({ host_id: remainingPlayers[0].player_id })
+        .eq("id", room.id);
+    }
+  }
+
+  // 3️⃣ Clear local UI and storage
+  setRoom(null);
+  setCurrentPlayer(null);
+  setPlayers([]);
+  setHasPlayedGame(false);
+  localStorage.removeItem("funora_room");
+  localStorage.removeItem("funora_player");
+};
+
 
   if (loading) {
     return (
