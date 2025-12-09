@@ -32,6 +32,38 @@ import CoupGame from './components/games/CoupGame';
 function App() {
 
   // ======================
+  // PROFILE LOADING
+  // ======================
+  const [profile, setProfile] = useState(() => {
+    const saved = localStorage.getItem("funora_profile");
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  // ==================================================
+  // UPDATE PROFILE STATS
+  // ==================================================
+  const updateProfileStats = (gameId: string, didWin: boolean = false) => {
+    if (!profile) return;
+
+    const updated = {
+      ...profile,
+      games_played: (profile.games_played || 0) + 1,
+      wins: (profile.wins || 0) + (didWin ? 1 : 0),
+      xp: (profile.xp || 0) + 10,               // give +10 xp per game
+      last_game: gameId,
+      favorite_game: profile.favorite_game || gameId,
+    };
+
+    setProfile(updated);
+    localStorage.setItem("funora_profile", JSON.stringify(updated));
+
+    // OPTIONAL: Save to Supabase
+    /*
+    await supabase.from("profiles").update(updated).eq("id", profile.id);
+    */
+  };
+
+  // ======================
   // PLAYER + ROOM STATE
   // ======================
   const [playerId] = useState(
@@ -72,7 +104,7 @@ function App() {
   };
 
   // ==================================================
-  // LOAD REAL FRESH ROOM FROM DB (fixes stale host)
+  // LOAD REAL FRESH ROOM
   // ==================================================
   useEffect(() => {
     const loadFreshRoom = async () => {
@@ -110,7 +142,6 @@ function App() {
 
     await supabase.from("players").delete().eq("player_id", currentPlayer.player_id);
 
-    // Reassign host if leaving host
     if (currentPlayer.player_id === room.host_id) {
       const { data: remaining } = await supabase
         .from("players")
@@ -125,23 +156,22 @@ function App() {
       }
     }
 
-    // Clear local UI
     setRoom(null);
     setCurrentPlayer(null);
     setPlayers([]);
+
     localStorage.removeItem("funora_room");
     localStorage.removeItem("funora_player");
   };
 
   // ==================================================
-  // REALTIME LISTENERS (PLAYERS + ROOM)
+  // REALTIME LISTENERS
   // ==================================================
   useEffect(() => {
     if (!room?.id) return;
 
     fetchPlayers(room.id);
 
-    // realtime player updates
     const playersSubscription = supabase
       .channel(`players-room-${room.id}`)
       .on(
@@ -151,7 +181,6 @@ function App() {
           const updated = await getPlayers(room.id);
           setPlayers(updated);
 
-          // if THIS player was kicked → leave
           if (currentPlayer && !updated.some(p => p.player_id === currentPlayer.player_id)) {
             handleLeave();
           }
@@ -159,7 +188,6 @@ function App() {
       )
       .subscribe();
 
-    // realtime room updates
     const roomSubscription = supabase
       .channel(`room-${room.id}`)
       .on(
@@ -178,7 +206,7 @@ function App() {
   }, [room?.id, currentPlayer, fetchPlayers]);
 
   // ==================================================
-  // REALTIME EMOJI LISTENER
+  // EMOJI REALTIME LISTENER
   // ==================================================
   useEffect(() => {
     if (!room?.id) return;
@@ -246,8 +274,6 @@ function App() {
     if (!room || !currentPlayer || currentPlayer.player_id !== room.host_id) return;
 
     const ids = players.map(p => p.player_id);
-    let gameState;
-
     const map: Record<string, any> = {
       imposter: initImposterGame,
       bluff: initBluffGame,
@@ -262,7 +288,7 @@ function App() {
       coup: initCoupGame,
     };
 
-    gameState = map[gameId]?.(ids);
+    const gameState = map[gameId]?.(ids);
     if (!gameState) return;
 
     setHasPlayedGame(true);
@@ -283,6 +309,10 @@ function App() {
 
   const handleEndGame = async () => {
     if (!room) return;
+
+    // ⭐⭐ UPDATE PROFILE STATS WHEN A GAME ENDS ⭐⭐
+    updateProfileStats(room.current_game!, false);
+
     await updateRoomState(room.id, {
       current_game: null,
       game_state: {},
@@ -301,17 +331,15 @@ function App() {
     );
   }
 
-  // If not in a room → HOME
   if (!room || !currentPlayer) {
     return <Home onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} />;
   }
 
   // ==================================================
-  // MAIN RETURN WRAPPER — contains emoji system + screens
+  // MAIN RETURN
   // ==================================================
   return (
     <>
-
       {/* FLOATING EMOJI LAYER */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden z-[9999]">
         {emojiEvents.map((e) => (
@@ -325,7 +353,7 @@ function App() {
         ))}
       </div>
 
-      {/* EMOJI BUTTON + PICKER */}
+      {/* EMOJI BUTTON */}
       <>
         <button
           onClick={() => setShowEmojiPicker(!showEmojiPicker)}
@@ -349,7 +377,7 @@ function App() {
         )}
       </>
 
-      {/* CHOOSE SCREEN */}
+      {/* GAME OR LOBBY */}
       {room.status === "lobby" || !room.current_game ? (
         <Lobby
           room={room}
@@ -396,7 +424,6 @@ function App() {
           }
         })()
       )}
-
     </>
   );
 }
