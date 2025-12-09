@@ -373,6 +373,24 @@ useEffect(() => {
       </div>
     );
   }
+  {/* ================================
+     FLOATING EMOJI ANIMATION LAYER
+================================ */}
+<div className="pointer-events-none fixed inset-0 overflow-hidden z-[9999]">
+  {emojiEvents.map((e) => (
+    <div
+      key={e.id}
+      className="absolute text-5xl animate-floating-emoji"
+      style={{
+        left: Math.random() * 80 + "%",
+        top: "100%",
+      }}
+    >
+      {e.emoji}
+    </div>
+  ))}
+</div>
+
 
   if (!room || !currentPlayer) {
     return <Home onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} />;
