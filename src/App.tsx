@@ -235,6 +235,48 @@ function App() {
     setPlayers(data);
   }, []);
 
+  // Called when a group presses "Start Game"
+const handleStartGroupGame = async ({
+  group,
+  members,
+}: {
+  group: any;
+  members: any[];
+}) => {
+  if (!profile) {
+    alert("Profile missing!");
+    return;
+  }
+
+  // 1. Create a new room (host = THIS browser's playerId)
+  const newRoom = await createRoom(playerId);
+
+  // 2. Join this user into the room as usual
+  const { room: joinedRoom, player } = await joinRoom(
+    newRoom.code,
+    playerId,
+    profile.name,
+    profile.avatar
+  );
+
+  setRoom(joinedRoom);
+  setCurrentPlayer(player);
+  localStorage.setItem("funora_room", JSON.stringify(joinedRoom));
+  localStorage.setItem("funora_player", JSON.stringify(player));
+  await fetchPlayers(joinedRoom.id);
+
+  // 3. Drop a message in the group chat with the room code
+  await supabase.from("group_messages").insert({
+    group_id: group.id,
+    profile_id: profile.id,
+    content: `🎮 Party started! Join the Funora room with code: ${joinedRoom.code}`,
+  });
+
+  // 4. Return roomCode so Groups.tsx can also optionally handle it
+  return { roomCode: joinedRoom.code };
+};
+
+
   // =============================================
   // LEAVE ROOM
   // =============================================
