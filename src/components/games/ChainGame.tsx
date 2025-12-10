@@ -314,7 +314,7 @@ if (gameState.phase === "reveal") {
             onClick={() => onEndGame(results)}
             className="w-full mt-8 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-bold hover:scale-105 transition"
           >
-            Back to Lobby (Finish Game)
+            Back to Lobby
           </button>
         ) : (
           <p className="mt-6 text-gray-500 text-sm">
