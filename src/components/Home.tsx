@@ -32,7 +32,13 @@ interface HomeProps {
 
 
 
-export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
+export default function Home({ 
+  onCreateRoom, 
+  onJoinRoom, 
+  profile, 
+  onStartGroupGame        // <-- ADD THIS HERE!!
+}) {
+ 
   const [view, setView] = useState<
     "home" | "create" | "join" | "profile" | "public" | "groups"
   >("home");
