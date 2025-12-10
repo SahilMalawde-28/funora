@@ -184,42 +184,64 @@ export default function BluffGame({
     );
   }
 
-  // 🧾 Phase 3: Results
-  if (gameState.phase === "results") {
-    const voteCounts: Record<string, number> = {};
-    Object.values(gameState.votes).forEach((v) => {
-      if (!v) return;
-      voteCounts[v] = (voteCounts[v] || 0) + 1;
-    });
-    const mostVoted = Object.entries(voteCounts).sort((a, b) => b[1] - a[1])[0];
-    const imposterIds = Object.keys(gameState.assignments).filter(
-      (id) => gameState.assignments[id] === "bluff"
-    );
+ // 🧾 Phase 3: Results
+if (gameState.phase === "results") {
+  const voteCounts: Record<string, number> = {};
+  Object.values(gameState.votes).forEach((v) => {
+    if (!v) return;
+    voteCounts[v] = (voteCounts[v] || 0) + 1;
+  });
 
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-white to-orange-50 p-6">
-        <div className="max-w-4xl mx-auto bg-white rounded-3xl shadow-xl p-8 space-y-6 text-center">
-          <Trophy className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
-          <h1 className="text-3xl font-black text-gray-800 mb-4">Round Results 🏁</h1>
+  const mostVoted = Object.entries(voteCounts).sort((a, b) => b[1] - a[1])[0];
 
-          <p className="text-lg text-gray-700 mb-2">
-            Most voted: <b>{players.find((p) => p.player_id === mostVoted?.[0])?.name || "No one"}</b>
-          </p>
-          <p className="text-lg text-gray-700">
-            Actual Bluffers:{" "}
-            <b>{imposterIds.map((id) => players.find((p) => p.player_id === id)?.name).join(", ")}</b>
-          </p>
+  const imposterIds = Object.keys(gameState.assignments).filter(
+    (id) => gameState.assignments[id] === "bluff"
+  );
 
-          <button
-            onClick={onEndGame}
-            className="mt-6 w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-xl font-bold text-lg shadow hover:scale-105 transition-all"
-          >
-            Back to Lobby
-          </button>
-        </div>
-      </div>
-    );
+  // --------------------------
+  // ⭐ DETERMINE PERSONAL WIN
+  // --------------------------
+  let didWin = false;
+
+  // Case 1: You are a bluffer → you win if NOT most voted
+  if (imposterIds.includes(currentPlayer.player_id)) {
+    const mostVotedId = mostVoted?.[0];
+    didWin = mostVotedId !== currentPlayer.player_id;
   }
+
+  // Case 2: You are a truth teller → you win if you voted correctly
+  else {
+    const yourVote = gameState.votes[currentPlayer.player_id];
+    didWin = imposterIds.includes(yourVote);
+  }
+
+  const handleFinish = () => onEndGame(didWin);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-white to-orange-50 p-6">
+      <div className="max-w-4xl mx-auto bg-white rounded-3xl shadow-xl p-8 space-y-6 text-center">
+        <Trophy className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
+        <h1 className="text-3xl font-black text-gray-800 mb-4">Round Results 🏁</h1>
+
+        <p className="text-lg text-gray-700 mb-2">
+          Most voted: <b>{players.find((p) => p.player_id === mostVoted?.[0])?.name || "No one"}</b>
+        </p>
+        <p className="text-lg text-gray-700">
+          Actual Bluffers:{" "}
+          <b>{imposterIds.map((id) => players.find((p) => p.player_id === id)?.name).join(", ")}</b>
+        </p>
+
+        <button
+          onClick={handleFinish}
+          className="mt-6 w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-xl font-bold text-lg shadow hover:scale-105 transition-all"
+        >
+          Back to Lobby
+        </button>
+      </div>
+    </div>
+  );
+}
+
 
   return <p className="text-center text-gray-600 mt-10">Loading game...</p>;
 }
