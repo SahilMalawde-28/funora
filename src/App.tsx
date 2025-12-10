@@ -401,17 +401,18 @@ function App() {
   // =============================================
   // END GAME → UPDATE PROFILE STATS
   // =============================================
-  const handleEndGame = async () => {
-    if (room?.current_game) {
-      await updateProfileStats(room.current_game, false);
-    }
+  const handleEndGame = async (didWin: boolean) => {
+  if (!room) return;
 
-    await updateRoomState(room!.id, {
-      current_game: null,
-      game_state: {},
-      status: "lobby",
-    });
-  };
+  await updateProfileStats(room.current_game!, didWin);
+
+  await updateRoomState(room.id, {
+    current_game: null,
+    game_state: {},
+    status: "lobby",
+  });
+};
+
 
   // =============================================
   // RENDER
