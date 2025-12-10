@@ -22,13 +22,9 @@ interface HomeProps {
   onCreateRoom: (name: string, avatar: string) => void;
   onJoinRoom: (code: string, name: string, avatar: string) => void;
   profile: any;
-
-  // NEW:
-  onStartGroupGame?: (args: {
-    group: any;
-    members: any[];
-  }) => Promise<{ roomCode?: string } | void> | void;
+  onStartGroupGame?: (args: { group: any; members: any[] }) => any; // <-- Add this
 }
+
 
 
 
