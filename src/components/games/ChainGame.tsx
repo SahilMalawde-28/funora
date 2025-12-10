@@ -277,41 +277,44 @@ export default function ChainGame({
   }
 
   // -------------------------
-  // REVEAL SCREEN
-  // -------------------------
-  if (gameState.phase === "reveal") {
-    const winnerId = gameState.activePlayers[0];
-    const winner = players.find(p => p.player_id === winnerId);
+// REVEAL SCREEN (GAME OVER)
+// -------------------------
+if (gameState.phase === "reveal") {
+  const winnerId = gameState.activePlayers[0];
+  const winner = players.find(p => p.player_id === winnerId);
 
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 via-white to-pink-50 p-6">
-        <div className="bg-white p-10 rounded-3xl shadow-2xl text-center max-w-lg">
+  const didIWin = winnerId === currentPlayer.player_id;
 
-          <Trophy className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-          <h1 className="text-4xl font-black mb-4">🏆 Winner!</h1>
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 via-white to-pink-50 p-6">
+      <div className="bg-white p-10 rounded-3xl shadow-2xl text-center max-w-lg">
 
-          {winner ? (
-            <div className="p-6 bg-yellow-100 rounded-2xl border border-yellow-400">
-              <p className="text-yellow-800 font-bold text-sm mb-2">Final Survivor</p>
-              <div className="flex justify-center items-center gap-3">
-                <span className="text-5xl">{winner.avatar}</span>
-                <span className="text-3xl font-black">{winner.name}</span>
-              </div>
+        <Trophy className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+        <h1 className="text-4xl font-black mb-4">🏆 Winner!</h1>
+
+        {winner ? (
+          <div className="p-6 bg-yellow-100 rounded-2xl border border-yellow-400">
+            <p className="text-yellow-800 font-bold text-sm mb-2">Final Survivor</p>
+            <div className="flex justify-center items-center gap-3">
+              <span className="text-5xl">{winner.avatar}</span>
+              <span className="text-3xl font-black">{winner.name}</span>
             </div>
-          ) : (
-            <p>No one survived 😅</p>
-          )}
+          </div>
+        ) : (
+          <p>No one survived 😅</p>
+        )}
 
-          <button
-            onClick={onEndGame}
-            className="w-full mt-8 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-bold hover:scale-105 transition"
-          >
-            Back to Lobby
-          </button>
-        </div>
+        <button
+          onClick={() => onEndGame(didIWin)}
+          className="w-full mt-8 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-bold hover:scale-105 transition"
+        >
+          Back to Lobby
+        </button>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
 
   return <div>Loading…</div>;
 }
