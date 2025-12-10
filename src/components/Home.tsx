@@ -25,10 +25,14 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
   /* ----------------------------------------------
       VIEW + STATE HANDLING
   ---------------------------------------------- */
-  const [view, setView] = useState<"home" | "create" | "join" | "profile">("home");
+  const [view, setView] = useState<"home" | "create" | "join" | "profile" | "public">("home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [roomCode, setRoomCode] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Public rooms state
+  const [publicRooms, setPublicRooms] = useState<any[]>([]);
+  const [publicLoading, setPublicLoading] = useState(false);
 
   /* ----------------------------------------------
       EDIT PROFILE MODAL STATE
@@ -55,11 +59,9 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
       avatar: profileAvatar,
     };
 
-    // Local
     const newProfile = { ...profile, ...updated };
     localStorage.setItem("funora_profile", JSON.stringify(newProfile));
 
-    // Supabase update
     await supabase.from("profiles").update(updated).eq("id", profile.id);
 
     setEditProfileModal(false);
@@ -73,6 +75,7 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
     if (!profile) return alert("Profile missing!");
     setLoading(true);
     await onCreateRoom(profile.name, profile.avatar);
+    setLoading(false);
   };
 
   const handleJoin = async () => {
@@ -87,6 +90,42 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
       setLoading(false);
     }
   };
+
+  const handleJoinPublicRoom = async (code: string) => {
+    if (!profile) return alert("Profile missing!");
+
+    setLoading(true);
+    try {
+      await onJoinRoom(code.toUpperCase(), profile.name, profile.avatar);
+    } catch {
+      alert("Failed to join room");
+      setLoading(false);
+    }
+  };
+
+  /* ----------------------------------------------
+      LOAD PUBLIC ROOMS
+  ---------------------------------------------- */
+  const loadPublicRooms = async () => {
+    setPublicLoading(true);
+    const { data, error } = await supabase
+      .from("rooms")
+      .select("id, code, host_id, status, mode, created_at")
+      .eq("mode", "public")
+      .eq("status", "lobby")
+      .order("created_at", { ascending: false });
+
+    if (!error && data) {
+      setPublicRooms(data);
+    }
+    setPublicLoading(false);
+  };
+
+  useEffect(() => {
+    if (view === "public") {
+      loadPublicRooms();
+    }
+  }, [view]);
 
   /* ----------------------------------------------
       MAIN RETURN
@@ -113,7 +152,11 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
           onClick={() => setView("profile")}
         />
 
-        <MenuItem icon={<Globe2 />} label="Public Rooms" disabled />
+        <MenuItem
+          icon={<Globe2 />}
+          label="Public Rooms"
+          onClick={() => setView("public")}
+        />
         <MenuItem icon={<Gamepad2 />} label="Party Mode" disabled />
 
         <div className="mt-auto mb-6">
@@ -143,11 +186,27 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
               </button>
             </div>
 
-            <MobileMenuItem label="Create Room" icon={<Plus />} onClick={() => { setView("create"); setSidebarOpen(false); }} />
-            <MobileMenuItem label="Join Room" icon={<Users />} onClick={() => { setView("join"); setSidebarOpen(false); }} />
-            <MobileMenuItem label="Profile" icon={<UserCircle />} onClick={() => { setView("profile"); setSidebarOpen(false); }} />
+            <MobileMenuItem
+              label="Create Room"
+              icon={<Plus />}
+              onClick={() => { setView("create"); setSidebarOpen(false); }}
+            />
+            <MobileMenuItem
+              label="Join Room"
+              icon={<Users />}
+              onClick={() => { setView("join"); setSidebarOpen(false); }}
+            />
+            <MobileMenuItem
+              label="Profile"
+              icon={<UserCircle />}
+              onClick={() => { setView("profile"); setSidebarOpen(false); }}
+            />
+            <MobileMenuItem
+              label="Public Rooms"
+              icon={<Globe2 />}
+              onClick={() => { setView("public"); setSidebarOpen(false); }}
+            />
 
-            <MobileMenuItem label="Public Rooms" icon={<Globe2 />} disabled />
             <MobileMenuItem label="Party Mode" icon={<Gamepad2 />} disabled />
           </div>
         </div>
@@ -187,6 +246,16 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
             onBack={() => setView("home")}
           />
         )}
+
+        {view === "public" && (
+          <PublicRoomsView
+            loading={publicLoading}
+            rooms={publicRooms}
+            onRefresh={loadPublicRooms}
+            onJoin={handleJoinPublicRoom}
+            onBack={() => setView("home")}
+          />
+        )}
       </div>
 
       {/* ========== EDIT PROFILE MODAL ========== */}
@@ -205,7 +274,7 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
 }
 
 /* ----------------------------------------------------
-      PROFILE PAGE (NOW SHOWS REAL STATS)
+      PROFILE PAGE (ONLY GAMES + EMOJIS)
 ---------------------------------------------------- */
 function ProfilePage({ profile, onEdit, onBack }) {
   return (
@@ -223,22 +292,10 @@ function ProfilePage({ profile, onEdit, onBack }) {
         Member since: {new Date(profile.created_at).toDateString()}
       </p>
 
-      {/* FULL STATS GRID */}
+      {/* ONLY THESE TWO STATS */}
       <div className="grid grid-cols-2 gap-4 text-center">
         <StatCard label="Games Played" value={profile.games_played ?? 0} />
-        <StatCard label="Wins" value={profile.wins ?? 0} />
-        <StatCard label="XP" value={profile.xp ?? 0} />
         <StatCard label="Emojis Sent" value={profile.emoji_used ?? 0} />
-        <StatCard label="Favorite Game" value={profile.favorite_game ?? "—"} />
-        <StatCard label="Last Game" value={profile.last_game ?? "—"} />
-        <StatCard
-          label="Last Seen"
-          value={
-            profile.last_seen
-              ? new Date(profile.last_seen).toLocaleString()
-              : "—"
-          }
-        />
       </div>
 
       <button
@@ -251,12 +308,76 @@ function ProfilePage({ profile, onEdit, onBack }) {
   );
 }
 
-
 function StatCard({ label, value }) {
   return (
     <div className="p-4 bg-gray-100 rounded-2xl shadow-inner">
       <div className="text-2xl font-black">{value}</div>
       <div className="text-sm text-gray-600">{label}</div>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------
+      PUBLIC ROOMS VIEW
+---------------------------------------------------- */
+function PublicRoomsView({
+  loading,
+  rooms,
+  onRefresh,
+  onJoin,
+  onBack,
+}: {
+  loading: boolean;
+  rooms: any[];
+  onRefresh: () => void;
+  onJoin: (code: string) => void;
+  onBack: () => void;
+}) {
+  return (
+    <div className="max-w-3xl w-full bg-white rounded-3xl shadow-2xl p-8 space-y-6 border border-gray-200">
+      <div className="flex items-center justify-between">
+        <button onClick={onBack} className="flex items-center gap-2 text-gray-600 hover:text-gray-800">
+          <ArrowLeft className="w-5 h-5" /> Back
+        </button>
+        <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2">
+          <Globe2 className="w-5 h-5 text-indigo-500" /> Public Rooms
+        </h2>
+        <button
+          onClick={onRefresh}
+          className="text-sm px-3 py-1 rounded-full border border-gray-300 hover:bg-gray-100"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="text-center text-gray-500">Loading public rooms…</p>
+      ) : rooms.length === 0 ? (
+        <p className="text-center text-gray-500">No public rooms right now. Ask someone to create one!</p>
+      ) : (
+        <div className="space-y-3">
+          {rooms.map((room) => (
+            <div
+              key={room.id}
+              className="flex items-center justify-between p-4 rounded-2xl border border-gray-200 bg-gray-50"
+            >
+              <div>
+                <p className="text-sm text-gray-500">Room Code</p>
+                <p className="text-xl font-mono tracking-[0.3em]">{room.code}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Status: <b>{room.status}</b> • Mode: <b>{room.mode}</b>
+                </p>
+              </div>
+              <button
+                onClick={() => onJoin(room.code)}
+                className="px-4 py-2 bg-indigo-500 text-white rounded-xl font-semibold hover:scale-105 transition"
+              >
+                Join
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -384,7 +505,7 @@ function HomeContent({ setView }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <FeatureCard title="Profiles" desc="Track stats & wins" />
+        <FeatureCard title="Profiles" desc="Track games & chaos" />
         <FeatureCard title="Groups" desc="Your squads (coming soon)" />
         <FeatureCard title="Public Rooms" desc="Join open lobbies" />
       </div>
