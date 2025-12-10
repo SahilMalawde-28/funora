@@ -14,6 +14,7 @@ export interface Room {
   status: 'lobby' | 'playing' | 'finished';
   created_at: string;
   updated_at: string;
+  flag: string;
 }
 
 export interface Player {
