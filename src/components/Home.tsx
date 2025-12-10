@@ -223,10 +223,22 @@ function ProfilePage({ profile, onEdit, onBack }) {
         Member since: {new Date(profile.created_at).toDateString()}
       </p>
 
-      <div className="grid grid-cols-3 gap-4 text-center">
-        <StatCard label="Games" value={profile.games_played ?? 0} />
+      {/* FULL STATS GRID */}
+      <div className="grid grid-cols-2 gap-4 text-center">
+        <StatCard label="Games Played" value={profile.games_played ?? 0} />
         <StatCard label="Wins" value={profile.wins ?? 0} />
         <StatCard label="XP" value={profile.xp ?? 0} />
+        <StatCard label="Emojis Sent" value={profile.emoji_used ?? 0} />
+        <StatCard label="Favorite Game" value={profile.favorite_game ?? "—"} />
+        <StatCard label="Last Game" value={profile.last_game ?? "—"} />
+        <StatCard
+          label="Last Seen"
+          value={
+            profile.last_seen
+              ? new Date(profile.last_seen).toLocaleString()
+              : "—"
+          }
+        />
       </div>
 
       <button
@@ -238,6 +250,7 @@ function ProfilePage({ profile, onEdit, onBack }) {
     </div>
   );
 }
+
 
 function StatCard({ label, value }) {
   return (
