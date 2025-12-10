@@ -401,6 +401,18 @@ function App() {
   // =============================================
   // END GAME → UPDATE PROFILE STATS
   // =============================================
+  const handleEndGame = async (didWin: boolean) => {
+  if (!room) return;
+
+  await updateProfileStats(room.current_game!, didWin);
+
+  await updateRoomState(room.id, {
+    current_game: null,
+    game_state: {},
+    status: "lobby",
+  });
+};
+
   // Called only by HOST when the game result is known
 const handleGameFinished = async (results: Record<string, boolean>) => {
   // results = { playerId: didWin }
@@ -419,7 +431,6 @@ const handleGameFinished = async (results: Record<string, boolean>) => {
     status: "lobby",
   });
 };
-
 
 
   // =============================================
