@@ -258,11 +258,11 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
         {view === "groups" && profile && (
   <Groups
     profile={profile}
+    onStartGroupGame={onStartGroupGame}
     onBack={() => setView("home")}
-    // Optional: later you can wire this to your App.tsx room system
-    // onStartGroupGame={({ group, members }) => { ... }}
   />
 )}
+
 
       </div>
 
