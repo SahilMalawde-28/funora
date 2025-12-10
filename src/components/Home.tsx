@@ -110,8 +110,8 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
     setPublicLoading(true);
     const { data, error } = await supabase
       .from("rooms")
-      .select("id, code, host_id, status, mode, created_at")
-      .eq("mode", "public")
+      .select("id, code, host_id, status, flag, created_at")
+      .eq("flag", "public")
       .eq("status", "lobby")
       .order("created_at", { ascending: false });
 
