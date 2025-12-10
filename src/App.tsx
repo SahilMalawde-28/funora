@@ -105,34 +105,46 @@ function App() {
   const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
   if (!profile) return;
 
+  // Name dynamic keys
+  const playedKey = `${gameId}_played`;
+  const winKey = `${gameId}_wins`;
+
   const updated = {
     ...profile,
-    games_played: (profile.games_played || 0) + 1,
-    wins: (profile.wins || 0) + (didWin ? 1 : 0),
-    xp: (profile.xp || 0) + 10,
+
+    // GLOBAL STATS
+    xp: Number(profile.xp || 0) + 10,
+    games_played: Number(profile.games_played || 0) + 1,
+    wins: Number(profile.wins || 0) + (didWin ? 1 : 0),
     last_game: gameId,
-    favorite_game: profile.favorite_game || gameId,
-    last_seen: new Date().toISOString()
+
+    // PER-GAME STATS
+    [playedKey]: Number(profile[playedKey] || 0) + 1,
+    [winKey]: Number(profile[winKey] || 0) + (didWin ? 1 : 0),
   };
 
   // Save locally
   localStorage.setItem("funora_profile", JSON.stringify(updated));
   setProfile(updated);
 
+  // Save in DB (only known fields → avoid column errors)
   if (profile.id) {
     await supabase
       .from("profiles")
       .update({
+        xp: updated.xp,
         games_played: updated.games_played,
         wins: updated.wins,
-        xp: updated.xp,
-        last_game: updated.last_game,
-        favorite_game: updated.favorite_game,
-        last_seen: updated.last_seen
+        last_game: gameId,
+
+        // spread only allowed columns
+        [playedKey]: updated[playedKey],
+        [winKey]: updated[winKey],
       })
       .eq("id", profile.id);
   }
 };
+
 
 
   // =============================================
