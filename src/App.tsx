@@ -102,39 +102,38 @@ function App() {
   // =============================================
   // UPDATE PROFILE STATS
   // =============================================
-  const updateProfileStats = async (gameId: string, didWin = false) => {
-    if (!profile) return;
+  const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
+  if (!profile) return;
 
-    const updated = {
-      ...profile,
-      games_played: (profile.games_played || 0) + 1,
-      wins: (profile.wins || 0) + (didWin ? 1 : 0),
-      xp: (profile.xp || 0) + 10,
-      last_game: gameId,
-      favorite_game: profile.favorite_game || gameId,
-      last_seen: new Date().toISOString(),
-    };
-
-    // Local update
-    localStorage.setItem("funora_profile", JSON.stringify(updated));
-    setProfile(updated);
-
-    if (profile.id) {
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          games_played: updated.games_played,
-          wins: updated.wins,
-          xp: updated.xp,
-          last_game: updated.last_game,
-          favorite_game: updated.favorite_game,
-          last_seen: updated.last_seen,
-        })
-        .eq("id", profile.id);
-
-      if (error) console.error("PROFILE UPDATE ERROR:", error);
-    }
+  const updated = {
+    ...profile,
+    games_played: (profile.games_played || 0) + 1,
+    wins: (profile.wins || 0) + (didWin ? 1 : 0),
+    xp: (profile.xp || 0) + 10,
+    last_game: gameId,
+    favorite_game: profile.favorite_game || gameId,
+    last_seen: new Date().toISOString()
   };
+
+  // Save locally
+  localStorage.setItem("funora_profile", JSON.stringify(updated));
+  setProfile(updated);
+
+  if (profile.id) {
+    await supabase
+      .from("profiles")
+      .update({
+        games_played: updated.games_played,
+        wins: updated.wins,
+        xp: updated.xp,
+        last_game: updated.last_game,
+        favorite_game: updated.favorite_game,
+        last_seen: updated.last_seen
+      })
+      .eq("id", profile.id);
+  }
+};
+
 
   // =============================================
   // ROOM + PLAYER STATE
