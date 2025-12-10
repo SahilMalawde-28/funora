@@ -483,27 +483,20 @@ function GroupsView({ groups, loading, onReload, profile, onBack }) {
   const [creating, setCreating] = useState(false);
   const [groupName, setGroupName] = useState("");
 
-  const createGroup = async () => {
-    if (!groupName.trim()) return;
+const createGroup = async (name: string, avatar: string, ownerId: string) => {
+  const { data, error } = await supabase
+    .from("groups")
+    .insert({
+      name,
+      avatar,
+      owner_id: ownerId,       // IMPORTANT
+    })
+    .select()
+    .single();
 
-    const { data: newGroup } = await supabase
-      .from("groups")
-      .insert({ name: groupName })
-      .select()
-      .single();
+  return { data, error };
+};
 
-    if (newGroup) {
-      await supabase.from("group_members").insert({
-        group_id: newGroup.id,
-        profile_id: profile.id,
-        role: "owner",
-      });
-
-      setCreating(false);
-      setGroupName("");
-      onReload();
-    }
-  };
 
   return (
     <div className="max-w-3xl w-full bg-white rounded-3xl shadow-2xl p-8 space-y-6 border border-gray-200">
