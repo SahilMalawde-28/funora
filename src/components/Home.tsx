@@ -255,19 +255,15 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
           />
         )}
 
-        {view === "groups" && (
-          <GroupsView
-            loading={groupsLoading}
-            groups={groups}
-            creating={creating}
-            groupName={groupName}
-            setGroupName={setGroupName}
-            setCreating={setCreating}
-            createGroup={createGroup}
-            groupCreatedMsg={groupCreatedMsg}
-            onBack={() => setView("home")}
-          />
-        )}
+        {view === "groups" && profile && (
+  <Groups
+    profile={profile}
+    onBack={() => setView("home")}
+    // Optional: later you can wire this to your App.tsx room system
+    // onStartGroupGame={({ group, members }) => { ... }}
+  />
+)}
+
       </div>
 
       {editProfileModal && (
