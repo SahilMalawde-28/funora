@@ -53,7 +53,7 @@ export default function Lobby({
 
     await supabase
       .from("rooms")
-      .update({ mode: newMode })
+      .update({ flag: newMode })
       .eq("id", room.id);
 
     // We trust realtime to update room in App, but locally this
