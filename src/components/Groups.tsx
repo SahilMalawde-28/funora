@@ -8,6 +8,10 @@ import {
   Send,
   Users,
   Gamepad2,
+  Copy,
+  LogOut,
+  Shield,
+  XCircle,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -49,7 +53,13 @@ type GroupMessageRow = {
 
 interface GroupsProps {
   profile: Profile;
-  onStartGroupGame?: (args: { group: Group; members: Profile[] }) => void;
+  // This will be wired from App.tsx:
+  // It should create a Funora room and (at least) join the current user.
+  // Optionally return { roomCode } so we can post it in chat.
+  onStartGroupGame?: (args: {
+    group: Group;
+    members: Profile[];
+  }) => Promise<{ roomCode?: string } | void> | void;
   onBack?: () => void;
 }
 
@@ -70,13 +80,14 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [newMessage, setNewMessage] = useState("");
 
+  const [busyAction, setBusyAction] = useState(false);
+
   const selectedMembership = useMemo(
     () => memberships.find((m) => m.group_id === selectedGroupId) || null,
     [memberships, selectedGroupId]
   );
-
   const selectedGroup = selectedMembership?.groups ?? null;
-  const isOwner = !!selectedGroup && selectedGroup.owner_id === profile.id;
+  const isOwner = selectedGroup && selectedGroup.owner_id === profile.id;
 
   /* ---------------------------------------------
    * LOAD USER GROUPS
@@ -89,18 +100,15 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
       .from("group_members")
       .select("id, role, group_id, groups(id, name, avatar, owner_id)")
       .eq("profile_id", profile.id)
-      .order("joined_at", { ascending: true }); // 🔥 FIX: joined_at
+      .order("joined_at", { ascending: true }); // NOTE: joined_at (your schema)
 
     if (error) {
       console.error("Error loading groups:", error);
       setMemberships([]);
     } else {
-      const rows = (data || []) as GroupMembership[];
-      setMemberships(rows);
-
-      // Auto-select first group if none selected
-      if (!selectedGroupId && rows.length > 0) {
-        setSelectedGroupId(rows[0].group_id);
+      setMemberships(data as GroupMembership[]);
+      if (!selectedGroupId && data && data.length > 0) {
+        setSelectedGroupId(data[0].group_id);
       }
     }
 
@@ -122,13 +130,13 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
       .from("group_members")
       .select("id, role, profile_id, profiles(id, name, avatar)")
       .eq("group_id", groupId)
-      .order("joined_at", { ascending: true }); // 🔥 FIX: joined_at
+      .order("joined_at", { ascending: true }); // joined_at again
 
     if (error) {
       console.error("Error loading group members:", error);
       setMembers([]);
     } else {
-      setMembers((data || []) as GroupMemberRow[]);
+      setMembers(data as GroupMemberRow[]);
     }
 
     setLoadingMembers(false);
@@ -152,7 +160,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
       console.error("Error loading messages:", error);
       setMessages([]);
     } else {
-      setMessages((data || []) as GroupMessageRow[]);
+      setMessages(data as GroupMessageRow[]);
     }
 
     setLoadingMessages(false);
@@ -178,7 +186,6 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
           filter: `group_id=eq.${selectedGroupId}`,
         },
         () => {
-          // Reload on new message (simple and safe)
           loadMessages(selectedGroupId);
         }
       )
@@ -197,6 +204,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
     if (!profile?.id) return;
     if (!newGroupName.trim()) return;
 
+    setBusyAction(true);
     try {
       const { data: group, error } = await supabase
         .from("groups")
@@ -211,6 +219,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
       if (error || !group) {
         console.error("Error creating group:", error);
         alert("Failed to create group");
+        setBusyAction(false);
         return;
       }
 
@@ -232,6 +241,8 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
     } catch (err) {
       console.error(err);
       alert("Something went wrong creating group");
+    } finally {
+      setBusyAction(false);
     }
   };
 
@@ -244,6 +255,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
 
     const trimmed = joinCode.trim();
 
+    setBusyAction(true);
     try {
       const { data: group, error: gErr } = await supabase
         .from("groups")
@@ -254,6 +266,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
       if (gErr || !group) {
         console.error("Group not found:", gErr);
         alert("Invalid group code");
+        setBusyAction(false);
         return;
       }
 
@@ -272,6 +285,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
         alert("You’re already in this group");
         setJoinCode("");
         setJoining(false);
+        setBusyAction(false);
         return;
       }
 
@@ -284,6 +298,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
       if (mErr) {
         console.error("Error joining group:", mErr);
         alert("Failed to join group");
+        setBusyAction(false);
         return;
       }
 
@@ -295,6 +310,74 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
     } catch (err) {
       console.error(err);
       alert("Something went wrong joining group");
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  /* ---------------------------------------------
+   * LEAVE GROUP
+   * ------------------------------------------- */
+  const handleLeaveGroup = async () => {
+    if (!selectedMembership || !selectedGroup) return;
+
+    const isOwnerOfGroup = selectedGroup.owner_id === profile.id;
+    if (isOwnerOfGroup && members.length > 1) {
+      alert(
+        "You are the owner. Transfer ownership or remove others before leaving."
+      );
+      return;
+    }
+
+    if (!confirm("Leave this group?")) return;
+
+    try {
+      await supabase.from("group_members").delete().eq("id", selectedMembership.id);
+
+      // If owner & alone → optionally delete the group itself
+      if (isOwnerOfGroup && members.length <= 1) {
+        await supabase.from("groups").delete().eq("id", selectedGroup.id);
+      }
+
+      setSelectedGroupId(null);
+      await loadGroups();
+    } catch (err) {
+      console.error("Error leaving group:", err);
+      alert("Failed to leave group");
+    }
+  };
+
+  /* ---------------------------------------------
+   * OWNER ACTIONS: promote / kick
+   * ------------------------------------------- */
+  const handlePromoteToAdmin = async (member: GroupMemberRow) => {
+    if (!isOwner) return;
+    if (member.role === "owner" || member.role === "admin") return;
+
+    try {
+      await supabase
+        .from("group_members")
+        .update({ role: "admin" })
+        .eq("id", member.id);
+
+      await loadMembers(member.group_id ?? selectedGroupId!);
+    } catch (err) {
+      console.error("Error promoting member:", err);
+      alert("Failed to promote");
+    }
+  };
+
+  const handleKickMember = async (member: GroupMemberRow) => {
+    if (!isOwner) return;
+    if (member.role === "owner") return;
+    if (!confirm(`Remove ${member.profiles.name} from this group?`)) return;
+
+    try {
+      await supabase.from("group_members").delete().eq("id", member.id);
+      await loadMembers(member.group_id ?? selectedGroupId!);
+    } catch (err) {
+      console.error("Error kicking member:", err);
+      alert("Failed to remove member");
     }
   };
 
@@ -320,16 +403,45 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
   };
 
   /* ---------------------------------------------
-   * START GAME (hook into rooms later)
+   * START GAME (call back to App.tsx)
    * ------------------------------------------- */
-  const handleStartGameClick = () => {
-    if (!selectedGroup || members.length === 0) return;
+  const handleStartGameClick = async () => {
+    if (!selectedGroup) return;
+    if (!members.length) return;
 
     const memberProfiles = members.map((m) => m.profiles);
-    if (onStartGroupGame) {
-      onStartGroupGame({ group: selectedGroup, members: memberProfiles });
-    } else {
-      alert("TODO: Wire this Start Game button into your room system in App.tsx");
+
+    try {
+      let roomCode: string | undefined;
+
+      if (onStartGroupGame) {
+        const result = await onStartGroupGame({
+          group: selectedGroup,
+          members: memberProfiles,
+        });
+        if (result && "roomCode" in result && result.roomCode) {
+          roomCode = result.roomCode;
+        }
+      }
+
+      // Even if callback doesn't return roomCode, ask host to share it.
+      if (roomCode) {
+        await supabase.from("group_messages").insert({
+          group_id: selectedGroup.id,
+          profile_id: profile.id,
+          content: `🎮 Party started! Join the Funora room with code: ${roomCode}`,
+        });
+      } else {
+        await supabase.from("group_messages").insert({
+          group_id: selectedGroup.id,
+          profile_id: profile.id,
+          content:
+            "🎮 Party started! The host just created a Funora room. Ask them for the room code to join.",
+        });
+      }
+    } catch (err) {
+      console.error("Error starting group game:", err);
+      alert("Failed to start game");
     }
   };
 
@@ -339,7 +451,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
   return (
     <div className="relative flex w-full h-[80vh] max-h-[800px] bg-white rounded-3xl shadow-2xl border border-gray-200 overflow-hidden">
       {/* LEFT: My Groups */}
-      <div className="w-64 border-r border-gray-200 bg-gray-50 flex flex-col">
+      <div className="w-64 border-right border-gray-200 bg-gray-50 flex flex-col border-r">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <div className="flex items-center gap-2">
             {onBack && (
@@ -394,7 +506,11 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
                           <Crown className="w-3 h-3 text-yellow-500" /> Owner
                         </>
                       )}
-                      {m.role === "admin" && "Admin"}
+                      {m.role === "admin" && (
+                        <>
+                          <Shield className="w-3 h-3 text-indigo-500" /> Admin
+                        </>
+                      )}
                       {m.role === "member" && "Member"}
                     </div>
                   </div>
@@ -456,23 +572,47 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
                   <div className="text-[11px] text-gray-500">
                     {members.length} member{members.length !== 1 && "s"}
                   </div>
+                  <div className="text-[10px] text-gray-400 flex items-center gap-1 mt-1">
+                    Group ID:{" "}
+                    <code className="font-mono">
+                      {selectedGroup.id.slice(0, 8)}…
+                    </code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedGroup.id);
+                        alert("Group ID copied!");
+                      }}
+                      className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-200 hover:bg-gray-300"
+                    >
+                      <Copy className="w-3 h-3 inline-block" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <button
-                onClick={handleStartGameClick}
-                disabled={members.length === 0}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <Gamepad2 className="w-4 h-4" />
-                Start Game
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleStartGameClick}
+                  disabled={members.length === 0}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Gamepad2 className="w-4 h-4" />
+                  Start Game
+                </button>
+                <button
+                  onClick={handleLeaveGroup}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Leave
+                </button>
+              </div>
             </div>
 
-            {/* Chat + Members */}
+            {/* Content: Chat + Members */}
             <div className="flex flex-1 min-h-0">
               {/* Chat */}
-              <div className="flex-1 flex flex-col border-right border-gray-200">
+              <div className="flex-1 flex flex-col border-r border-gray-200">
                 <div className="px-4 py-2 text-[11px] text-gray-500 flex items-center gap-1 border-b border-gray-100">
                   <MessageCircle className="w-3 h-3" />
                   Group chat
@@ -569,7 +709,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
               </div>
 
               {/* Members */}
-              <div className="w-56 flex flex-col border-l border-gray-200">
+              <div className="w-60 flex flex-col">
                 <div className="px-4 py-2 text-[11px] text-gray-500 border-b border-gray-100 flex items-center gap-1">
                   <Users className="w-3 h-3" />
                   Members
@@ -602,12 +742,41 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
                                 </span>
                               )}
                             </div>
-                            <div className="text-[10px] text-gray-500">
-                              {m.role === "owner" && "Owner"}
-                              {m.role === "admin" && "Admin"}
+                            <div className="text-[10px] text-gray-500 flex items-center gap-1">
+                              {m.role === "owner" && (
+                                <>
+                                  <Crown className="w-3 h-3 text-yellow-500" />{" "}
+                                  Owner
+                                </>
+                              )}
+                              {m.role === "admin" && (
+                                <>
+                                  <Shield className="w-3 h-3 text-indigo-500" />{" "}
+                                  Admin
+                                </>
+                              )}
                               {m.role === "member" && "Member"}
                             </div>
                           </div>
+
+                          {isOwner && !isMe && (
+                            <div className="flex flex-col gap-1">
+                              {m.role === "member" && (
+                                <button
+                                  onClick={() => handlePromoteToAdmin(m)}
+                                  className="p-1 rounded-lg bg-indigo-100 hover:bg-indigo-200"
+                                >
+                                  <Shield className="w-3 h-3 text-indigo-700" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleKickMember(m)}
+                                className="p-1 rounded-lg bg-red-50 hover:bg-red-100"
+                              >
+                                <XCircle className="w-3 h-3 text-red-600" />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })
@@ -618,7 +787,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
           </>
         )}
 
-        {/* CREATE / JOIN OVERLAY */}
+        {/* CREATION / JOIN PANELS */}
         {(creating || joining) && (
           <div className="absolute bottom-6 left-6 w-80 bg-white border border-gray-200 shadow-xl rounded-2xl p-4 space-y-3">
             <div className="flex items-center justify-between">
@@ -629,6 +798,8 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
                 onClick={() => {
                   setCreating(false);
                   setJoining(false);
+                  setNewGroupName("");
+                  setJoinCode("");
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -646,10 +817,10 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
                 />
                 <button
                   onClick={handleCreateGroup}
-                  disabled={!newGroupName.trim()}
+                  disabled={!newGroupName.trim() || busyAction}
                   className="w-full text-sm font-semibold bg-indigo-500 text-white py-2.5 rounded-xl hover:bg-indigo-600 disabled:opacity-40"
                 >
-                  Create
+                  {busyAction ? "Creating…" : "Create"}
                 </button>
               </>
             )}
@@ -667,10 +838,10 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
                 />
                 <button
                   onClick={handleJoinGroup}
-                  disabled={!joinCode.trim()}
+                  disabled={!joinCode.trim() || busyAction}
                   className="w-full text-sm font-semibold bg-gray-800 text-white py-2.5 rounded-xl hover:bg-gray-900 disabled:opacity-40"
                 >
-                  Join
+                  {busyAction ? "Joining…" : "Join"}
                 </button>
               </>
             )}
