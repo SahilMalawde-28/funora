@@ -44,7 +44,7 @@ export default function Lobby({
     setSelectedPlayer(null);
   };
 
-  const isPublic = room.mode === "public";
+  const isPublic = room.flag === "public";
 
   const toggleRoomMode = async () => {
     if (!isHost) return;
