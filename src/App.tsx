@@ -401,10 +401,17 @@ function App() {
   // =============================================
   // END GAME → UPDATE PROFILE STATS
   // =============================================
-  const handleEndGame = async (didWin: boolean) => {
-  if (!room) return;
+  // Called only by HOST when the game result is known
+const handleGameFinished = async (results: Record<string, boolean>) => {
+  // results = { playerId: didWin }
+  for (const pid of Object.keys(results)) {
+    const didWin = results[pid];
 
-  await updateProfileStats(room.current_game!, didWin);
+    // If this user is the one represented by this device:
+    if (profile && profile.id === pid) {
+      await updateProfileStats(room.current_game!, didWin);
+    }
+  }
 
   await updateRoomState(room.id, {
     current_game: null,
@@ -412,6 +419,7 @@ function App() {
     status: "lobby",
   });
 };
+
 
 
   // =============================================
