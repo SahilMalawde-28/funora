@@ -238,28 +238,44 @@ function App() {
   // =============================================
   // LEAVE ROOM
   // =============================================
-  const handleLeave = async () => {
-    if (!room || !currentPlayer) return;
+ const handleLeave = async () => {
+  if (!room || !currentPlayer) return;
 
-    await supabase.from("players").delete().eq("player_id", currentPlayer.player_id);
+  // Remove current player from players table
+  await supabase.from("players").delete().eq("player_id", currentPlayer.player_id);
 
-    if (currentPlayer.player_id === room.host_id) {
-      const { data: remaining } = await supabase
-        .from("players")
-        .select("*")
-        .eq("room_id", room.id);
+  // Fetch remaining players AFTER deletion
+  const { data: remainingPlayers } = await supabase
+    .from("players")
+    .select("*")
+    .eq("room_id", room.id);
 
-      if (remaining?.length > 0) {
-        await supabase.from("rooms").update({ host_id: remaining[0].player_id }).eq("id", room.id);
-      }
-    }
+  // CASE 1: No players left → close the room
+  if (!remainingPlayers || remainingPlayers.length === 0) {
+    await supabase
+      .from("rooms")
+      .update({ status: "closed" })
+      .eq("id", room.id);
 
-    setRoom(null);
-    setCurrentPlayer(null);
-    setPlayers([]);
-    localStorage.removeItem("funora_room");
-    localStorage.removeItem("funora_player");
-  };
+    console.log("Room closed because all players left.");
+  }
+
+  // CASE 2: Host left but players still exist → assign new host
+  else if (currentPlayer.player_id === room.host_id) {
+    await supabase
+      .from("rooms")
+      .update({ host_id: remainingPlayers[0].player_id })
+      .eq("id", room.id);
+  }
+
+  // Clear local storage
+  setRoom(null);
+  setCurrentPlayer(null);
+  setPlayers([]);
+  localStorage.removeItem("funora_room");
+  localStorage.removeItem("funora_player");
+};
+
 
   // =============================================
   // REALTIME LISTENERS
