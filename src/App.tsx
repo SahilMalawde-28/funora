@@ -502,7 +502,7 @@ const handleGameFinished = async (results: Record<string, boolean>) => {
             gameState: room.game_state,
             onUpdateState: handleUpdateGameState,
             onEndGame: handleEndGame,
-            onGameFinished={handleGameFinished},
+            onGameFinished:{handleGameFinished},
 
             
           };
