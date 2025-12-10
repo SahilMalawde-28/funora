@@ -283,7 +283,11 @@ if (gameState.phase === "reveal") {
   const winnerId = gameState.activePlayers[0];
   const winner = players.find(p => p.player_id === winnerId);
 
-  const didIWin = winnerId === currentPlayer.player_id;
+  // build results map for handleGameFinished
+  const results: Record<string, boolean> = {};
+  players.forEach(p => {
+    results[p.player_id] = p.player_id === winnerId;
+  });
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 via-white to-pink-50 p-6">
@@ -304,16 +308,24 @@ if (gameState.phase === "reveal") {
           <p>No one survived 😅</p>
         )}
 
-        <button
-          onClick={() => onEndGame(didIWin)}
-          className="w-full mt-8 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-bold hover:scale-105 transition"
-        >
-          Back to Lobby
-        </button>
+        {/* HOST decides when to finish game */}
+        {currentPlayer.player_id === room.host_id ? (
+          <button
+            onClick={() => onGameFinished(results)}
+            className="w-full mt-8 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-bold hover:scale-105 transition"
+          >
+            Back to Lobby (Finish Game)
+          </button>
+        ) : (
+          <p className="mt-6 text-gray-500 text-sm">
+            Waiting for host to return to lobby…
+          </p>
+        )}
       </div>
     </div>
   );
 }
+
 
 
   return <div>Loading…</div>;
