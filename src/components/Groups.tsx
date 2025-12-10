@@ -49,12 +49,8 @@ type GroupMessageRow = {
 
 interface GroupsProps {
   profile: Profile;
-  // Optional hook into your room/game system later
-  onStartGroupGame?: (args: {
-    group: Group;
-    members: Profile[];
-  }) => void;
-  onBack?: () => void; // optional back button if you embed this somewhere
+  onStartGroupGame?: (args: { group: Group; members: Profile[] }) => void;
+  onBack?: () => void;
 }
 
 export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProps) {
@@ -80,8 +76,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
   );
 
   const selectedGroup = selectedMembership?.groups ?? null;
-
-  const isOwner = selectedGroup && selectedGroup.owner_id === profile.id;
+  const isOwner = !!selectedGroup && selectedGroup.owner_id === profile.id;
 
   /* ---------------------------------------------
    * LOAD USER GROUPS
@@ -94,16 +89,18 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
       .from("group_members")
       .select("id, role, group_id, groups(id, name, avatar, owner_id)")
       .eq("profile_id", profile.id)
-      .order("created_at", { ascending: true });
+      .order("joined_at", { ascending: true }); // 🔥 FIX: joined_at
 
     if (error) {
       console.error("Error loading groups:", error);
       setMemberships([]);
     } else {
-      setMemberships(data as GroupMembership[]);
-      // If nothing selected yet, auto-select first
-      if (!selectedGroupId && data && data.length > 0) {
-        setSelectedGroupId(data[0].group_id);
+      const rows = (data || []) as GroupMembership[];
+      setMemberships(rows);
+
+      // Auto-select first group if none selected
+      if (!selectedGroupId && rows.length > 0) {
+        setSelectedGroupId(rows[0].group_id);
       }
     }
 
@@ -125,13 +122,13 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
       .from("group_members")
       .select("id, role, profile_id, profiles(id, name, avatar)")
       .eq("group_id", groupId)
-      .order("created_at", { ascending: true });
+      .order("joined_at", { ascending: true }); // 🔥 FIX: joined_at
 
     if (error) {
       console.error("Error loading group members:", error);
       setMembers([]);
     } else {
-      setMembers(data as GroupMemberRow[]);
+      setMembers((data || []) as GroupMemberRow[]);
     }
 
     setLoadingMembers(false);
@@ -145,7 +142,9 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
 
     const { data, error } = await supabase
       .from("group_messages")
-      .select("id, group_id, profile_id, content, created_at, profiles(id, name, avatar)")
+      .select(
+        "id, group_id, profile_id, content, created_at, profiles(id, name, avatar)"
+      )
       .eq("group_id", groupId)
       .order("created_at", { ascending: true });
 
@@ -153,7 +152,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
       console.error("Error loading messages:", error);
       setMessages([]);
     } else {
-      setMessages(data as GroupMessageRow[]);
+      setMessages((data || []) as GroupMessageRow[]);
     }
 
     setLoadingMessages(false);
@@ -164,10 +163,10 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
    * ------------------------------------------- */
   useEffect(() => {
     if (!selectedGroupId) return;
+
     loadMembers(selectedGroupId);
     loadMessages(selectedGroupId);
 
-    // Realtime subscription for messages
     const channel = supabase
       .channel(`group-messages-${selectedGroupId}`)
       .on(
@@ -179,7 +178,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
           filter: `group_id=eq.${selectedGroupId}`,
         },
         () => {
-          // Simple approach → reload messages
+          // Reload on new message (simple and safe)
           loadMessages(selectedGroupId);
         }
       )
@@ -215,7 +214,6 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
         return;
       }
 
-      // Add creator as member
       const { error: mErr } = await supabase.from("group_members").insert({
         group_id: group.id,
         profile_id: profile.id,
@@ -247,7 +245,6 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
     const trimmed = joinCode.trim();
 
     try {
-      // Check group exists
       const { data: group, error: gErr } = await supabase
         .from("groups")
         .select("*")
@@ -260,7 +257,6 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
         return;
       }
 
-      // Check if already member
       const { data: existing, error: eErr } = await supabase
         .from("group_members")
         .select("id")
@@ -327,11 +323,9 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
    * START GAME (hook into rooms later)
    * ------------------------------------------- */
   const handleStartGameClick = () => {
-    if (!selectedGroup) return;
-    if (!members.length) return;
+    if (!selectedGroup || members.length === 0) return;
 
     const memberProfiles = members.map((m) => m.profiles);
-
     if (onStartGroupGame) {
       onStartGroupGame({ group: selectedGroup, members: memberProfiles });
     } else {
@@ -343,7 +337,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
    * RENDER
    * ------------------------------------------- */
   return (
-    <div className="flex w-full h-[80vh] max-h-[800px] bg-white rounded-3xl shadow-2xl border border-gray-200 overflow-hidden">
+    <div className="relative flex w-full h-[80vh] max-h-[800px] bg-white rounded-3xl shadow-2xl border border-gray-200 overflow-hidden">
       {/* LEFT: My Groups */}
       <div className="w-64 border-r border-gray-200 bg-gray-50 flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
@@ -438,7 +432,6 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
 
       {/* RIGHT: Group Detail / Chat */}
       <div className="flex-1 flex flex-col">
-        {/* If no group selected */}
         {!selectedGroup ? (
           <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
             {memberships.length === 0
@@ -476,10 +469,10 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
               </button>
             </div>
 
-            {/* Content: Chat + Members */}
+            {/* Chat + Members */}
             <div className="flex flex-1 min-h-0">
               {/* Chat */}
-              <div className="flex-1 flex flex-col border-r border-gray-200">
+              <div className="flex-1 flex flex-col border-right border-gray-200">
                 <div className="px-4 py-2 text-[11px] text-gray-500 flex items-center gap-1 border-b border-gray-100">
                   <MessageCircle className="w-3 h-3" />
                   Group chat
@@ -530,10 +523,13 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
                                 mine ? "text-indigo-100" : "text-gray-500"
                               }`}
                             >
-                              {new Date(msg.created_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                              {new Date(msg.created_at).toLocaleTimeString(
+                                [],
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )}
                             </div>
                           </div>
                           {mine && (
@@ -573,7 +569,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
               </div>
 
               {/* Members */}
-              <div className="w-56 flex flex-col">
+              <div className="w-56 flex flex-col border-l border-gray-200">
                 <div className="px-4 py-2 text-[11px] text-gray-500 border-b border-gray-100 flex items-center gap-1">
                   <Users className="w-3 h-3" />
                   Members
@@ -622,7 +618,7 @@ export default function Groups({ profile, onStartGroupGame, onBack }: GroupsProp
           </>
         )}
 
-        {/* CREATION / JOIN PANELS (overlay at bottom-left area) */}
+        {/* CREATE / JOIN OVERLAY */}
         {(creating || joining) && (
           <div className="absolute bottom-6 left-6 w-80 bg-white border border-gray-200 shadow-xl rounded-2xl p-4 space-y-3">
             <div className="flex items-center justify-between">
