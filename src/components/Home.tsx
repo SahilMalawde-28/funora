@@ -22,8 +22,14 @@ interface HomeProps {
   onCreateRoom: (name: string, avatar: string) => void;
   onJoinRoom: (code: string, name: string, avatar: string) => void;
   profile: any;
-  onStartGroupGame?: (args: { group: any; members: any[] }) => Promise<{ roomCode?: string } | void> | void;
+
+  // NEW:
+  onStartGroupGame?: (args: {
+    group: any;
+    members: any[];
+  }) => Promise<{ roomCode?: string } | void> | void;
 }
+
 
 
 export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
