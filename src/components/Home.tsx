@@ -263,13 +263,14 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
           />
         )}
 
-        {view === "groups" && profile && (
+        {view === "groups" && (
   <Groups
     profile={profile}
-    onStartGroupGame={onStartGroupGame}
+    onStartGroupGame={onStartGroupGame}   // <-- PASS IT DOWN
     onBack={() => setView("home")}
   />
 )}
+
 
 
       </div>
