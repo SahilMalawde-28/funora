@@ -401,10 +401,8 @@ function App() {
   // =============================================
   // END GAME → UPDATE PROFILE STATS
   // =============================================
-  const handleEndGame = async (didWin: boolean) => {
+  const handleEndGame = async () => {
   if (!room) return;
-
-  await updateProfileStats(room.current_game!, didWin);
 
   await updateRoomState(room.id, {
     current_game: null,
@@ -412,6 +410,7 @@ function App() {
     status: "lobby",
   });
 };
+
 
   // Called only by HOST when the game result is known
 const handleGameFinished = async (results: Record<string, boolean>) => {
