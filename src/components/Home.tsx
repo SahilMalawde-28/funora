@@ -12,83 +12,89 @@ import {
   Pencil,
   ArrowLeft,
 } from "lucide-react";
+import { supabase } from "../lib/supabase";
 import { AVATARS } from "../lib/gameLogic";
 
 interface HomeProps {
   onCreateRoom: (name: string, avatar: string) => void;
   onJoinRoom: (code: string, name: string, avatar: string) => void;
+  profile: any; // Comes from App.tsx
 }
 
-export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
-  /* ----------------------------
-       PROFILE MANAGEMENT LOGIC
-  ---------------------------- */
-  const [profile, setProfile] = useState(() => {
-    const saved = localStorage.getItem("funora_profile");
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  const [profileName, setProfileName] = useState(profile?.name || "");
-  const [profileAvatar, setProfileAvatar] = useState(profile?.avatar || AVATARS[0]);
-
-  const [editProfileModal, setEditProfileModal] = useState(false);
-
-  const saveProfile = () => {
-    const newProfile = {
-      id: profile?.id || crypto.randomUUID(),
-      name: profileName.trim(),
-      avatar: profileAvatar,
-      created_at: profile?.created_at || new Date().toISOString(),
-    };
-    localStorage.setItem("funora_profile", JSON.stringify(newProfile));
-    setProfile(newProfile);
-    setEditProfileModal(false);
-  };
-
-  // Force profile setup on very first visit
-  useEffect(() => {
-    if (!profile) {
-      setEditProfileModal(true);
-    }
-  }, []);
-
-  /* ----------------------------
-       VIEW STATE HANDLING
-  ---------------------------- */
+export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
+  /* ----------------------------------------------
+      VIEW + STATE HANDLING
+  ---------------------------------------------- */
   const [view, setView] = useState<"home" | "create" | "join" | "profile">("home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  /* ----------------------------
-          ROOM ACTIONS
-  ---------------------------- */
   const [roomCode, setRoomCode] = useState("");
   const [loading, setLoading] = useState(false);
 
+  /* ----------------------------------------------
+      EDIT PROFILE MODAL STATE
+  ---------------------------------------------- */
+  const [editProfileModal, setEditProfileModal] = useState(false);
+  const [profileName, setProfileName] = useState(profile?.name || "");
+  const [profileAvatar, setProfileAvatar] = useState(profile?.avatar || "🙂");
+
+  useEffect(() => {
+    if (profile) {
+      setProfileName(profile.name);
+      setProfileAvatar(profile.avatar);
+    }
+  }, [profile]);
+
+  /* ----------------------------------------------
+      SAVE PROFILE → Updates Supabase + Local
+  ---------------------------------------------- */
+  const saveProfile = async () => {
+    if (!profile) return;
+
+    const updated = {
+      name: profileName.trim(),
+      avatar: profileAvatar,
+    };
+
+    // Local
+    const newProfile = { ...profile, ...updated };
+    localStorage.setItem("funora_profile", JSON.stringify(newProfile));
+
+    // Supabase update
+    await supabase.from("profiles").update(updated).eq("id", profile.id);
+
+    setEditProfileModal(false);
+    window.location.reload();
+  };
+
+  /* ----------------------------------------------
+      ROOM ACTIONS
+  ---------------------------------------------- */
   const handleCreate = async () => {
-    if (!profile) return alert("Create your profile first!");
+    if (!profile) return alert("Profile missing!");
     setLoading(true);
     await onCreateRoom(profile.name, profile.avatar);
   };
 
   const handleJoin = async () => {
-    if (!profile) return alert("Create your profile first!");
-    if (roomCode.length !== 6) return;
+    if (!profile) return alert("Profile missing!");
+    if (roomCode.length !== 6) return alert("Enter 6-digit code!");
+
     setLoading(true);
     try {
       await onJoinRoom(roomCode.toUpperCase(), profile.name, profile.avatar);
     } catch {
-      alert("Room not found!");
+      alert("Room not found");
       setLoading(false);
     }
   };
 
-  /* ----------------------------
-         MAIN COMPONENT RETURN
-  ---------------------------- */
+  /* ----------------------------------------------
+      MAIN RETURN
+  ---------------------------------------------- */
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
 
-      {/* ---------- SIDEBAR (DESKTOP) ---------- */}
+      {/* ========== DESKTOP SIDEBAR ========== */}
       <div className="hidden md:flex flex-col bg-white/80 backdrop-blur-xl shadow-xl border-r border-gray-200 w-20 hover:w-64 transition-all duration-300 group">
 
         <div className="p-6 flex items-center gap-3">
@@ -101,7 +107,6 @@ export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
         <MenuItem icon={<Users />} label="Join Room" onClick={() => setView("join")} />
         <MenuItem icon={<Plus />} label="Create Room" onClick={() => setView("create")} />
 
-        {/* PROFILE BUTTON */}
         <MenuItem
           icon={<UserCircle />}
           label="Profile"
@@ -116,7 +121,7 @@ export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
         </div>
       </div>
 
-      {/* ---------- MOBILE SIDEBAR ---------- */}
+      {/* ========== MOBILE SIDEBAR BUTTON ========== */}
       <div className="md:hidden p-4 absolute">
         <button
           onClick={() => setSidebarOpen(true)}
@@ -126,6 +131,7 @@ export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
         </button>
       </div>
 
+      {/* ========== MOBILE SIDEBAR PANEL ========== */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm md:hidden">
           <div className="absolute left-0 top-0 h-full w-72 bg-white p-6 space-y-6 shadow-xl rounded-r-3xl">
@@ -137,9 +143,9 @@ export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
               </button>
             </div>
 
-            <MobileMenuItem label="Create Room" icon={<Plus />} onClick={() => {setView("create"); setSidebarOpen(false);}} />
-            <MobileMenuItem label="Join Room" icon={<Users />} onClick={() => {setView("join"); setSidebarOpen(false);}} />
-            <MobileMenuItem label="Profile" icon={<UserCircle />} onClick={() => {setView("profile"); setSidebarOpen(false);}} />
+            <MobileMenuItem label="Create Room" icon={<Plus />} onClick={() => { setView("create"); setSidebarOpen(false); }} />
+            <MobileMenuItem label="Join Room" icon={<Users />} onClick={() => { setView("join"); setSidebarOpen(false); }} />
+            <MobileMenuItem label="Profile" icon={<UserCircle />} onClick={() => { setView("profile"); setSidebarOpen(false); }} />
 
             <MobileMenuItem label="Public Rooms" icon={<Globe2 />} disabled />
             <MobileMenuItem label="Party Mode" icon={<Gamepad2 />} disabled />
@@ -147,7 +153,7 @@ export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
         </div>
       )}
 
-      {/* ---------- MAIN CONTENT ---------- */}
+      {/* ========== MAIN CONTENT ========== */}
       <div className="flex-1 flex items-center justify-center p-10">
 
         {view === "home" && <HomeContent setView={setView} />}
@@ -174,21 +180,16 @@ export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
           />
         )}
 
-        {/* ---------- PROFILE PAGE ---------- */}
         {view === "profile" && profile && (
           <ProfilePage
             profile={profile}
-            onEdit={() => {
-              setProfileName(profile.name);
-              setProfileAvatar(profile.avatar);
-              setEditProfileModal(true);
-            }}
+            onEdit={() => setEditProfileModal(true)}
             onBack={() => setView("home")}
           />
         )}
       </div>
 
-      {/* ---------- EDIT PROFILE MODAL ---------- */}
+      {/* ========== EDIT PROFILE MODAL ========== */}
       {editProfileModal && (
         <ProfileEditModal
           profileName={profileName}
@@ -203,9 +204,9 @@ export default function Home({ onCreateRoom, onJoinRoom }: HomeProps) {
   );
 }
 
-/* ----------------------------------------------
-   PROFILE PAGE COMPONENT
----------------------------------------------- */
+/* ----------------------------------------------------
+      PROFILE PAGE (NOW SHOWS REAL STATS)
+---------------------------------------------------- */
 function ProfilePage({ profile, onEdit, onBack }) {
   return (
     <div className="max-w-lg w-full bg-white rounded-3xl shadow-2xl p-10 space-y-8 border border-gray-200 text-center">
@@ -218,13 +219,14 @@ function ProfilePage({ profile, onEdit, onBack }) {
 
       <h2 className="text-4xl font-black">{profile.name}</h2>
 
-      <p className="text-gray-500">Member since: {new Date(profile.created_at).toDateString()}</p>
+      <p className="text-gray-500">
+        Member since: {new Date(profile.created_at).toDateString()}
+      </p>
 
-      {/* STATS (placeholder for now) */}
       <div className="grid grid-cols-3 gap-4 text-center">
-        <StatCard label="Games" value="–" />
-        <StatCard label="Wins" value="–" />
-        <StatCard label="XP" value="–" />
+        <StatCard label="Games" value={profile.games_played ?? 0} />
+        <StatCard label="Wins" value={profile.wins ?? 0} />
+        <StatCard label="XP" value={profile.xp ?? 0} />
       </div>
 
       <button
@@ -246,9 +248,9 @@ function StatCard({ label, value }) {
   );
 }
 
-/* ----------------------------------------------
-   EDIT PROFILE MODAL
----------------------------------------------- */
+/* ----------------------------------------------------
+      EDIT PROFILE MODAL
+---------------------------------------------------- */
 function ProfileEditModal({
   profileName,
   profileAvatar,
@@ -304,10 +306,9 @@ function ProfileEditModal({
   );
 }
 
-/* ----------------------------------------------
-   EXISTING UI COMPONENTS (UNCHANGED)
----------------------------------------------- */
-
+/* ----------------------------------------------------
+      UTILITY COMPONENTS
+---------------------------------------------------- */
 function MenuItem({ icon, label, onClick, disabled = false }) {
   return (
     <button
@@ -341,7 +342,6 @@ function MobileMenuItem({ icon, label, onClick, disabled = false }) {
   );
 }
 
-/* HERO + FEATURE SECTION UNCHANGED */
 function HomeContent({ setView }) {
   return (
     <div className="max-w-3xl mx-auto text-center space-y-10">
@@ -371,7 +371,7 @@ function HomeContent({ setView }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <FeatureCard title="Profiles" desc="Permanent identity" />
+        <FeatureCard title="Profiles" desc="Track stats & wins" />
         <FeatureCard title="Groups" desc="Your squads (coming soon)" />
         <FeatureCard title="Public Rooms" desc="Join open lobbies" />
       </div>
