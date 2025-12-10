@@ -616,4 +616,48 @@ function ProfileEditModal({
     </div>
   );
 }
-function CreateJoinCard({ title, roomCode, setRoomCode, loading, onSubmit, onBack, buttonText, }) { return ( <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 space-y-6 border border-gray-200"> <button onClick={onBack} className="text-gray-500 hover:text-gray-700"> ← Back </button> <h2 className="text-3xl font-black text-gray-800">{title}</h2> {setRoomCode && ( <> <label className="block text-sm font-bold">Room Code</label> <input value={roomCode} onChange={(e) => setRoomCode(e.target.value.toUpperCase())} maxLength={6} className="w-full border-2 rounded-xl px-4 py-3 text-center font-bold tracking-widest" /> </> )} <button onClick={onSubmit} disabled={loading} className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-4 rounded-xl font-bold hover:scale-105 transition" > {loading ? "Loading…" : buttonText} </button> </div> ); }
+
+function CreateJoinCard({
+  title,
+  roomCode,
+  setRoomCode,
+  loading,
+  onSubmit,
+  onBack,
+  buttonText,
+}) {
+  return (
+    <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 space-y-6 border border-gray-200">
+
+      {/* Back Button */}
+      <button onClick={onBack} className="text-gray-500 hover:text-gray-700">
+        ← Back
+      </button>
+
+      {/* Title */}
+      <h2 className="text-3xl font-black text-gray-800">{title}</h2>
+
+      {/* Room Code Input (Only for Join Room) */}
+      {setRoomCode && (
+        <>
+          <label className="block text-sm font-bold">Room Code</label>
+          <input
+            value={roomCode}
+            onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+            maxLength={6}
+            className="w-full border-2 rounded-xl px-4 py-3 text-center font-bold tracking-widest"
+          />
+        </>
+      )}
+
+      {/* Submit Button */}
+      <button
+        onClick={onSubmit}
+        disabled={loading}
+        className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-4 rounded-xl font-bold hover:scale-105 transition disabled:opacity-50"
+      >
+        {loading ? "Loading…" : buttonText}
+      </button>
+    </div>
+  );
+}
