@@ -401,35 +401,29 @@ function App() {
   // =============================================
   // END GAME → UPDATE PROFILE STATS
   // =============================================
-  const handleEndGame = async () => {
+const handleEndGame = async (results?: Record<string, boolean>) => {
   if (!room) return;
 
-  await updateRoomState(room.id, {
-    current_game: null,
-    game_state: {},
-    status: "lobby",
-  });
-};
+  // If results exist → update stats
+  if (results) {
+    for (const pid of Object.keys(results)) {
+      const didWin = results[pid];
 
-
-  // Called only by HOST when the game result is known
-const handleGameFinished = async (results: Record<string, boolean>) => {
-  // results = { playerId: didWin }
-  for (const pid of Object.keys(results)) {
-    const didWin = results[pid];
-
-    // If this user is the one represented by this device:
-    if (profile && profile.id === pid) {
-      await updateProfileStats(room.current_game!, didWin);
+      // Update ONLY stats for the player who is using this device
+      if (profile && profile.id === pid) {
+        await updateProfileStats(room.current_game!, didWin);
+      }
     }
   }
 
+  // Reset room (for everyone)
   await updateRoomState(room.id, {
     current_game: null,
     game_state: {},
     status: "lobby",
   });
 };
+
 
 
   // =============================================
