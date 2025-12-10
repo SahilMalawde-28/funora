@@ -365,7 +365,7 @@ function PublicRoomsView({
                 <p className="text-sm text-gray-500">Room Code</p>
                 <p className="text-xl font-mono tracking-[0.3em]">{room.code}</p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Status: <b>{room.status}</b> • Mode: <b>{room.mode}</b>
+                  Status: <b>{room.status}</b> • Mode: <b>{room.flag}</b>
                 </p>
               </div>
               <button
