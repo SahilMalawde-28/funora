@@ -311,7 +311,7 @@ if (gameState.phase === "reveal") {
         {/* HOST decides when to finish game */}
         {currentPlayer.player_id === room.host_id ? (
           <button
-            onClick={() => onGameFinished(results)}
+            onClick={() => onEndGame(results)}
             className="w-full mt-8 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-bold hover:scale-105 transition"
           >
             Back to Lobby (Finish Game)
