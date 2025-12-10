@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { supabase, Room, Player } from './lib/supabase';
-import { createRoom, joinRoom, getPlayers, updateRoomState } from './lib/roomService';
+import { useState, useEffect, useCallback } from "react";
+import { supabase, Room, Player } from "./lib/supabase";
+import { createRoom, joinRoom, getPlayers, updateRoomState } from "./lib/roomService";
+
 import {
   initImposterGame,
   initBluffGame,
@@ -13,111 +14,70 @@ import {
   initHerdGame,
   initChameleonGame,
   initCoupGame,
-} from './lib/gameLogic';
+} from "./lib/gameLogic";
 
-import Home from './components/Home';
-import Lobby from './components/Lobby';
-import ImposterGame from './components/games/ImposterGame';
-import BluffGame from './components/games/BluffGame';
-import TeamGame from './components/games/TeamGame';
-import WavelengthGame from './components/games/WavelengthGame';
-import WordGuessGame from './components/games/WordGuessGame';
-import ChainGame from './components/games/ChainGame';
-import BoilingGame from './components/games/BoilingGame';
-import MemoryGame from './components/games/MemoryGame';
-import HerdGame from './components/games/HerdGame';
-import ChameleonGame from './components/games/ChameleonGame';
-import CoupGame from './components/games/CoupGame';
+import Home from "./components/Home";
+import Lobby from "./components/Lobby";
+import ImposterGame from "./components/games/ImposterGame";
+import BluffGame from "./components/games/BluffGame";
+import TeamGame from "./components/games/TeamGame";
+import WavelengthGame from "./components/games/WavelengthGame";
+import WordGuessGame from "./components/games/WordGuessGame";
+import ChainGame from "./components/games/ChainGame";
+import BoilingGame from "./components/games/BoilingGame";
+import MemoryGame from "./components/games/MemoryGame";
+import HerdGame from "./components/games/HerdGame";
+import ChameleonGame from "./components/games/ChameleonGame";
+import CoupGame from "./components/games/CoupGame";
 
 function App() {
-
-  // ======================
+  // =============================================
   // PROFILE LOADING
-  // ======================
+  // =============================================
   const [profile, setProfile] = useState(() => {
     const saved = localStorage.getItem("funora_profile");
     return saved ? JSON.parse(saved) : null;
   });
 
-  // ==================================================
-  // UPDATE PROFILE STATS
-  // ==================================================
-const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
-  if (!profile) return;
-
-  const updated = {
-    ...profile,
-    games_played: (profile.games_played || 0) + 1,
-    wins: (profile.wins || 0) + (didWin ? 1 : 0),
-    xp: (profile.xp || 0) + 10,
-    last_game: gameId,
-    favorite_game: profile.favorite_game || gameId,
-  };
-
-  // Update local instantly
-  localStorage.setItem("funora_profile", JSON.stringify(updated));
-  setProfile(updated);
-
-  // If profile has Supabase ID → update Supabase
-  if (profile.id) {
-    await supabase
-      .from("profiles")
-      .update({
-        games_played: updated.games_played,
-        wins: updated.wins,
-        xp: updated.xp,
-        last_game: gameId,
-        favorite_game: updated.favorite_game,
-      })
-      .eq("id", profile.id);
-  }
-};
-
-
-  // ======================
-  // PLAYER + ROOM STATE
-  // ======================
-  const [playerId] = useState(
-    () => `player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-  );
-
-  const [room, setRoom] = useState<Room | null>(() => {
-    const saved = localStorage.getItem('funora_room');
-    return saved ? JSON.parse(saved) : null;
-  });
-
+  // Create or sync profile with Supabase
   useEffect(() => {
-  const ensureProfile = async () => {
-    const local = localStorage.getItem("funora_profile");
+    const ensureProfile = async () => {
+      const local = localStorage.getItem("funora_profile");
 
-    if (local) {
-      const parsed = JSON.parse(local);
+      // CASE 1: Local exists
+      if (local) {
+        const parsed = JSON.parse(local);
 
-      // IF local exists but missing DB id → create in Supabase
-      if (!parsed.id) {
-        const { data: created } = await supabase
-          .from("profiles")
-          .insert({
-            name: parsed.name || "New Player",
-            avatar: parsed.avatar || "🙂",
-            games_played: 0,
-            wins: 0,
-            xp: 0,
-          })
-          .select()
-          .single();
+        // Local exists but no Supabase ID → create a new DB entry
+        if (!parsed.id) {
+          const { data, error } = await supabase
+            .from("profiles")
+            .insert({
+              name: parsed.name || "Player",
+              avatar: parsed.avatar || "🙂",
+              games_played: parsed.games_played || 0,
+              wins: parsed.wins || 0,
+              xp: parsed.xp || 0,
+              favorite_game: parsed.favorite_game || null,
+              last_game: parsed.last_game || null,
+              emoji_used: parsed.emoji_used || 0,
+            })
+            .select()
+            .single();
 
-        if (created) {
-          localStorage.setItem("funora_profile", JSON.stringify(created));
-          setProfile(created);
+          if (!error && data) {
+            localStorage.setItem("funora_profile", JSON.stringify(data));
+            setProfile(data);
+          }
+        } else {
+          // Already has DB ID → trust local
+          setProfile(parsed);
         }
-      } else {
-        setProfile(parsed);
+        return;
       }
-    } 
-    else {
-      // No profile at all → create new one
-      const { data: created } = await supabase
+
+      // CASE 2: No profile at all → create new one
+      const { data, error } = await supabase
         .from("profiles")
         .insert({
           name: "Player",
@@ -125,23 +85,71 @@ const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
           games_played: 0,
           wins: 0,
           xp: 0,
+          emoji_used: 0,
         })
         .select()
         .single();
 
-      if (created) {
-        localStorage.setItem("funora_profile", JSON.stringify(created));
-        setProfile(created);
+      if (!error && data) {
+        localStorage.setItem("funora_profile", JSON.stringify(data));
+        setProfile(data);
       }
+    };
+
+    ensureProfile();
+  }, []);
+
+  // =============================================
+  // UPDATE PROFILE STATS
+  // =============================================
+  const updateProfileStats = async (gameId: string, didWin = false) => {
+    if (!profile) return;
+
+    const updated = {
+      ...profile,
+      games_played: (profile.games_played || 0) + 1,
+      wins: (profile.wins || 0) + (didWin ? 1 : 0),
+      xp: (profile.xp || 0) + 10,
+      last_game: gameId,
+      favorite_game: profile.favorite_game || gameId,
+      last_seen: new Date().toISOString(),
+    };
+
+    // Local update
+    localStorage.setItem("funora_profile", JSON.stringify(updated));
+    setProfile(updated);
+
+    if (profile.id) {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          games_played: updated.games_played,
+          wins: updated.wins,
+          xp: updated.xp,
+          last_game: updated.last_game,
+          favorite_game: updated.favorite_game,
+          last_seen: updated.last_seen,
+        })
+        .eq("id", profile.id);
+
+      if (error) console.error("PROFILE UPDATE ERROR:", error);
     }
   };
 
-  ensureProfile();
-}, []);
+  // =============================================
+  // ROOM + PLAYER STATE
+  // =============================================
+  const [playerId] = useState(
+    () => `player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  );
 
+  const [room, setRoom] = useState<Room | null>(() => {
+    const saved = localStorage.getItem("funora_room");
+    return saved ? JSON.parse(saved) : null;
+  });
 
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(() => {
-    const saved = localStorage.getItem('funora_player');
+    const saved = localStorage.getItem("funora_player");
     return saved ? JSON.parse(saved) : null;
   });
 
@@ -149,59 +157,51 @@ const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
   const [loading, setLoading] = useState(false);
   const [hasPlayedGame, setHasPlayedGame] = useState(false);
 
-  // ==================================================
+  // =============================================
   // EMOJI THROWER SYSTEM
-  // ==================================================
+  // =============================================
   const [emojiEvents, setEmojiEvents] = useState<{ id: string; emoji: string }[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-  const EMOJI_LIST = ["😂","💀","😡","😎","😭","🔥","🤯","✨","🤡","🙌","🎉","😱","❤️","🫡","🧠"];
+  const EMOJI_LIST = ["😂", "💀", "😡", "😎", "😭", "🔥", "🤯", "✨", "🤡", "🙌", "🎉", "😱", "❤️", "🫡", "🧠"];
 
   const throwEmoji = async (emoji: string) => {
     if (!room) return;
 
-    await supabase.from("emoji_events").insert({
-      room_id: room.id,
-      emoji,
-    });
-
+    await supabase.from("emoji_events").insert({ room_id: room.id, emoji });
     setShowEmojiPicker(false);
   };
 
-  // ==================================================
-  // LOAD REAL FRESH ROOM
-  // ==================================================
+  // =============================================
+  // FRESH ROOM LOAD (fixes stale host)
+  // =============================================
   useEffect(() => {
-    const loadFreshRoom = async () => {
+    const loadFresh = async () => {
       if (!room) return;
 
-      const { data: fresh } = await supabase
+      const { data } = await supabase
         .from("rooms")
         .select("*")
         .eq("id", room.id)
         .single();
 
-      if (fresh) setRoom(fresh);
+      if (data) setRoom(data);
     };
 
-    loadFreshRoom();
+    loadFresh();
   }, []);
 
-  // ==================================================
+  // =============================================
   // FETCH PLAYERS
-  // ==================================================
+  // =============================================
   const fetchPlayers = useCallback(async (roomId: string) => {
-    try {
-      const data = await getPlayers(roomId);
-      setPlayers(data);
-    } catch (error) {
-      console.error("Error fetching players:", error);
-    }
+    const data = await getPlayers(roomId);
+    setPlayers(data);
   }, []);
 
-  // ==================================================
-  // LEAVE ROOM LOGIC
-  // ==================================================
+  // =============================================
+  // LEAVE ROOM
+  // =============================================
   const handleLeave = async () => {
     if (!room || !currentPlayer) return;
 
@@ -213,66 +213,53 @@ const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
         .select("*")
         .eq("room_id", room.id);
 
-      if (remaining && remaining.length > 0) {
-        await supabase
-          .from("rooms")
-          .update({ host_id: remaining[0].player_id })
-          .eq("id", room.id);
+      if (remaining?.length > 0) {
+        await supabase.from("rooms").update({ host_id: remaining[0].player_id }).eq("id", room.id);
       }
     }
 
     setRoom(null);
     setCurrentPlayer(null);
     setPlayers([]);
-
     localStorage.removeItem("funora_room");
     localStorage.removeItem("funora_player");
   };
 
-  // ==================================================
+  // =============================================
   // REALTIME LISTENERS
-  // ==================================================
+  // =============================================
   useEffect(() => {
     if (!room?.id) return;
-
     fetchPlayers(room.id);
 
-    const playersSubscription = supabase
-      .channel(`players-room-${room.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "players", filter: `room_id=eq.${room.id}` },
-        async (payload) => {
-          const updated = await getPlayers(room.id);
-          setPlayers(updated);
+    const playersSub = supabase
+      .channel(`players-${room.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "players", filter: `room_id=eq.${room.id}` }, async () => {
+        const updated = await getPlayers(room.id);
+        setPlayers(updated);
 
-          if (currentPlayer && !updated.some(p => p.player_id === currentPlayer.player_id)) {
-            handleLeave();
-          }
+        if (currentPlayer && !updated.some((p) => p.player_id === currentPlayer.player_id)) {
+          handleLeave();
         }
-      )
+      })
       .subscribe();
 
-    const roomSubscription = supabase
+    const roomSub = supabase
       .channel(`room-${room.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "rooms", filter: `id=eq.${room.id}` },
-        (payload) => {
-          if (payload.new) setRoom(payload.new as Room);
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: `id=eq.${room.id}` }, (payload) => {
+        if (payload.new) setRoom(payload.new as Room);
+      })
       .subscribe();
 
     return () => {
-      supabase.removeChannel(playersSubscription);
-      supabase.removeChannel(roomSubscription);
+      supabase.removeChannel(playersSub);
+      supabase.removeChannel(roomSub);
     };
-  }, [room?.id, currentPlayer, fetchPlayers]);
+  }, [room?.id, currentPlayer]);
 
-  // ==================================================
+  // =============================================
   // EMOJI REALTIME LISTENER
-  // ==================================================
+  // =============================================
   useEffect(() => {
     if (!room?.id) return;
 
@@ -283,11 +270,10 @@ const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
         { event: "INSERT", schema: "public", table: "emoji_events", filter: `room_id=eq.${room.id}` },
         (payload) => {
           const emoji = payload.new.emoji;
-
-          setEmojiEvents(prev => [...prev, { id: payload.new.id, emoji }]);
+          setEmojiEvents((prev) => [...prev, { id: payload.new.id, emoji }]);
 
           setTimeout(() => {
-            setEmojiEvents(prev => prev.filter(e => e.id !== payload.new.id));
+            setEmojiEvents((prev) => prev.filter((e) => e.id !== payload.new.id));
           }, 3000);
         }
       )
@@ -296,50 +282,50 @@ const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
     return () => supabase.removeChannel(channel);
   }, [room?.id]);
 
-  // ==================================================
-  // CREATE + JOIN ROOM
-  // ==================================================
+  // =============================================
+  // CREATE ROOM
+  // =============================================
   const handleCreateRoom = async (name: string, avatar: string) => {
     setLoading(true);
-    try {
-      const newRoom = await createRoom(playerId);
-      const { player } = await joinRoom(newRoom.code, playerId, name, avatar);
+    const newRoom = await createRoom(playerId);
+    const { player } = await joinRoom(newRoom.code, playerId, name, avatar);
 
-      setRoom(newRoom);
-      setCurrentPlayer(player);
-      localStorage.setItem("funora_room", JSON.stringify(newRoom));
-      localStorage.setItem("funora_player", JSON.stringify(player));
+    setRoom(newRoom);
+    setCurrentPlayer(player);
 
-      await fetchPlayers(newRoom.id);
-    } finally {
-      setLoading(false);
-    }
+    localStorage.setItem("funora_room", JSON.stringify(newRoom));
+    localStorage.setItem("funora_player", JSON.stringify(player));
+
+    await fetchPlayers(newRoom.id);
+    setLoading(false);
   };
 
+  // =============================================
+  // JOIN ROOM
+  // =============================================
   const handleJoinRoom = async (code: string, name: string, avatar: string) => {
     setLoading(true);
-    try {
-      const { room: joinedRoom, player } = await joinRoom(code, playerId, name, avatar);
+    const { room: joinedRoom, player } = await joinRoom(code, playerId, name, avatar);
 
-      setRoom(joinedRoom);
-      setCurrentPlayer(player);
-      localStorage.setItem("funora_room", JSON.stringify(joinedRoom));
-      localStorage.setItem("funora_player", JSON.stringify(player));
+    setRoom(joinedRoom);
+    setCurrentPlayer(player);
 
-      await fetchPlayers(joinedRoom.id);
-    } finally {
-      setLoading(false);
-    }
+    localStorage.setItem("funora_room", JSON.stringify(joinedRoom));
+    localStorage.setItem("funora_player", JSON.stringify(player));
+
+    await fetchPlayers(joinedRoom.id);
+    setLoading(false);
   };
 
-  // ==================================================
-  // GAME START + STATE UPDATE
-  // ==================================================
+  // =============================================
+  // START GAME
+  // =============================================
   const handleStartGame = async (gameId: string) => {
     if (!room || !currentPlayer || currentPlayer.player_id !== room.host_id) return;
 
-    const ids = players.map(p => p.player_id);
-    const map: Record<string, any> = {
+    const ids = players.map((p) => p.player_id);
+
+    const map: any = {
       imposter: initImposterGame,
       bluff: initBluffGame,
       team: initTeamGame,
@@ -365,48 +351,47 @@ const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
     });
   };
 
+  // =============================================
+  // UPDATE GAME STATE
+  // =============================================
   const handleUpdateGameState = async (updates: any) => {
     if (!room) return;
+
     await updateRoomState(room.id, {
       game_state: { ...room.game_state, ...updates },
     });
   };
 
+  // =============================================
+  // END GAME → UPDATE PROFILE STATS
+  // =============================================
   const handleEndGame = async () => {
-    if (!room) return;
+    if (room?.current_game) {
+      await updateProfileStats(room.current_game, false);
+    }
 
-    // ⭐⭐ UPDATE PROFILE STATS WHEN A GAME ENDS ⭐⭐
-    updateProfileStats(room.current_game!, false);
-
-    await updateRoomState(room.id, {
+    await updateRoomState(room!.id, {
       current_game: null,
       game_state: {},
       status: "lobby",
     });
   };
 
-  // ==================================================
-  // RENDER UI
-  // ==================================================
+  // =============================================
+  // RENDER
+  // =============================================
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        Loading...
-      </div>
-    );
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
 
   if (!room || !currentPlayer) {
-    return <Home onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} />;
+    return <Home onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} profile={profile} />;
   }
 
-  // ==================================================
-  // MAIN RETURN
-  // ==================================================
   return (
     <>
       {/* FLOATING EMOJI LAYER */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden z-[9999]">
+      <div className="pointer-events-none fixed inset-0 z-[9999] overflow-hidden">
         {emojiEvents.map((e) => (
           <div
             key={e.id}
@@ -418,11 +403,11 @@ const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
         ))}
       </div>
 
-      {/* EMOJI BUTTON */}
+      {/* EMOJI PICKER */}
       <>
         <button
           onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-          className="fixed bottom-6 right-6 bg-white shadow-xl rounded-full p-4 text-2xl hover:scale-110 transition z-[10000]"
+          className="fixed bottom-6 right-6 bg-white rounded-full p-4 text-2xl shadow-xl hover:scale-110 transition z-[10000]"
         >
           🎉
         </button>
@@ -451,6 +436,7 @@ const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
           onStartGame={handleStartGame}
           onLeave={handleLeave}
           hasPlayedGame={hasPlayedGame}
+          profile={profile}
         />
       ) : (
         (() => {
@@ -464,17 +450,28 @@ const updateProfileStats = async (gameId: string, didWin: boolean = false) => {
           };
 
           switch (room.current_game) {
-            case "imposter": return <ImposterGame {...props} />;
-            case "bluff": return <BluffGame {...props} />;
-            case "team": return <TeamGame {...props} />;
-            case "wavelength": return <WavelengthGame {...props} />;
-            case "wordguess": return <WordGuessGame {...props} />;
-            case "chain": return <ChainGame {...props} />;
-            case "boilingWater": return <BoilingGame {...props} />;
-            case "memory": return <MemoryGame {...props} />;
-            case "herd": return <HerdGame {...props} />;
-            case "cham": return <ChameleonGame {...props} />;
-            case "coup": return <CoupGame {...props} />;
+            case "imposter":
+              return <ImposterGame {...props} />;
+            case "bluff":
+              return <BluffGame {...props} />;
+            case "team":
+              return <TeamGame {...props} />;
+            case "wavelength":
+              return <WavelengthGame {...props} />;
+            case "wordguess":
+              return <WordGuessGame {...props} />;
+            case "chain":
+              return <ChainGame {...props} />;
+            case "boilingWater":
+              return <BoilingGame {...props} />;
+            case "memory":
+              return <MemoryGame {...props} />;
+            case "herd":
+              return <HerdGame {...props} />;
+            case "cham":
+              return <ChameleonGame {...props} />;
+            case "coup":
+              return <CoupGame {...props} />;
             default:
               return (
                 <Lobby
