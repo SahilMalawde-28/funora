@@ -166,11 +166,36 @@ function App() {
   const EMOJI_LIST = ["😂", "💀", "😡", "😎", "😭", "🔥", "🤯", "✨", "🤡", "🙌", "🎉", "😱", "❤️", "🫡", "🧠"];
 
   const throwEmoji = async (emoji: string) => {
-    if (!room) return;
+  if (!room) return;
 
-    await supabase.from("emoji_events").insert({ room_id: room.id, emoji });
-    setShowEmojiPicker(false);
-  };
+  await supabase.from("emoji_events").insert({
+    room_id: room.id,
+    emoji,
+  });
+
+  // increase emoji_used count
+  if (profile) {
+    const updated = {
+      ...profile,
+      emoji_used: (profile.emoji_used || 0) + 1,
+      last_seen: new Date().toISOString(),
+    };
+
+    localStorage.setItem("funora_profile", JSON.stringify(updated));
+    setProfile(updated);
+
+    await supabase
+      .from("profiles")
+      .update({
+        emoji_used: updated.emoji_used,
+        last_seen: updated.last_seen
+      })
+      .eq("id", profile.id);
+  }
+
+  setShowEmojiPicker(false);
+};
+
 
   // =============================================
   // FRESH ROOM LOAD (fixes stale host)
