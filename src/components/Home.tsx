@@ -7,12 +7,11 @@ import {
   Plus,
   UserCircle,
   Globe2,
-  Gamepad2,
   X,
   Pencil,
   ArrowLeft,
-  MessageCircle,
   Group,
+  CheckCircle2,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { AVATARS } from "../lib/gameLogic";
@@ -27,19 +26,25 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
   const [view, setView] = useState<
     "home" | "create" | "join" | "profile" | "public" | "groups"
   >("home");
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [roomCode, setRoomCode] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Public rooms
+  // PUBLIC ROOMS
   const [publicRooms, setPublicRooms] = useState<any[]>([]);
   const [publicLoading, setPublicLoading] = useState(false);
 
-  // Groups
+  // GROUPS
   const [groups, setGroups] = useState<any[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
 
-  // Profile edit modal
+  // GROUP CREATION
+  const [creating, setCreating] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [groupCreatedMsg, setGroupCreatedMsg] = useState("");
+
+  // EDIT PROFILE MODAL
   const [editProfileModal, setEditProfileModal] = useState(false);
   const [profileName, setProfileName] = useState(profile?.name || "");
   const [profileAvatar, setProfileAvatar] = useState(profile?.avatar || "🙂");
@@ -51,9 +56,9 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
     }
   }, [profile]);
 
-  /* ============================================
+  /* ========================================================
      SAVE PROFILE
-  ============================================ */
+  ======================================================== */
   const saveProfile = async () => {
     if (!profile) return;
 
@@ -71,19 +76,21 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
     window.location.reload();
   };
 
-  /* ============================================
+  /* ========================================================
      CREATE ROOM
-  ============================================ */
+  ======================================================== */
   const handleCreate = async () => {
     if (!profile) return alert("Profile missing!");
     setLoading(true);
+
     await onCreateRoom(profile.name, profile.avatar);
+
     setLoading(false);
   };
 
-  /* ============================================
+  /* ========================================================
      JOIN ROOM
-  ============================================ */
+  ======================================================== */
   const handleJoin = async () => {
     if (!profile) return alert("Profile missing!");
     if (roomCode.length !== 6) return alert("Enter 6-digit code!");
@@ -101,6 +108,7 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
   const handleJoinPublicRoom = async (code: string) => {
     if (!profile) return alert("Profile missing!");
     setLoading(true);
+
     try {
       await onJoinRoom(code.toUpperCase(), profile.name, profile.avatar);
     } catch {
@@ -109,9 +117,9 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
     }
   };
 
-  /* ============================================
+  /* ========================================================
      PUBLIC ROOMS
-  ============================================ */
+  ======================================================== */
   const loadPublicRooms = async () => {
     setPublicLoading(true);
 
@@ -130,13 +138,12 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
     if (view === "public") loadPublicRooms();
   }, [view]);
 
-  /* ============================================
-     GROUPS SYSTEM
-  ============================================ */
-
-  // Fetch user groups
+  /* ========================================================
+     GROUPS — LOAD
+  ======================================================== */
   const loadGroups = async () => {
     if (!profile) return;
+
     setGroupsLoading(true);
 
     const { data } = await supabase
@@ -152,25 +159,57 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
     if (view === "groups") loadGroups();
   }, [view]);
 
-  /* ============================================
+  /* ========================================================
+     GROUPS — CREATE
+  ======================================================== */
+  const createGroup = async () => {
+    if (!groupName.trim()) return alert("Enter group name!");
+
+    const { data: group, error } = await supabase
+      .from("groups")
+      .insert({
+        name: groupName.trim(),
+        avatar: "👥",
+        owner_id: profile.id,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.log(error);
+      alert("Failed to create group");
+      return;
+    }
+
+    // Add creator as member
+    await supabase.from("group_members").insert({
+      group_id: group.id,
+      profile_id: profile.id,
+    });
+
+    setGroupCreatedMsg(`Group "${group.name}" created successfully!`);
+    setCreating(false);
+    setGroupName("");
+
+    // Refresh list
+    loadGroups();
+
+    // Hide success message after 3s
+    setTimeout(() => setGroupCreatedMsg(""), 3000);
+  };
+
+  /* ========================================================
      MAIN RETURN
-  ============================================ */
+  ======================================================== */
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
-      {/* DESKTOP SIDEBAR */}
+
       <Sidebar setView={setView} />
 
-      {/* MOBILE MENU BUTTON */}
       <MobileMenuButton setSidebarOpen={setSidebarOpen} />
 
-      {/* MOBILE SIDEBAR */}
-      <MobileSidebar
-        open={sidebarOpen}
-        setOpen={setSidebarOpen}
-        setView={setView}
-      />
+      <MobileSidebar open={sidebarOpen} setOpen={setSidebarOpen} setView={setView} />
 
-      {/* MAIN CONTENT */}
       <div className="flex-1 flex items-center justify-center p-10">
         {view === "home" && <HomeContent setView={setView} />}
 
@@ -216,16 +255,19 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
 
         {view === "groups" && (
           <GroupsView
-            groups={groups}
             loading={groupsLoading}
-            onReload={loadGroups}
-            profile={profile}
+            groups={groups}
+            creating={creating}
+            groupName={groupName}
+            setGroupName={setGroupName}
+            setCreating={setCreating}
+            createGroup={createGroup}
+            groupCreatedMsg={groupCreatedMsg}
             onBack={() => setView("home")}
           />
         )}
       </div>
 
-      {/* PROFILE EDIT MODAL */}
       {editProfileModal && (
         <ProfileEditModal
           profileName={profileName}
@@ -240,10 +282,9 @@ export default function Home({ onCreateRoom, onJoinRoom, profile }: HomeProps) {
   );
 }
 
-/* ======================================================
-   COMPONENTS BELOW
-====================================================== */
-
+/* ========================================================
+   SIDEBAR COMPONENTS
+======================================================== */
 function Sidebar({ setView }) {
   return (
     <div className="hidden md:flex flex-col bg-white/80 backdrop-blur-xl shadow-xl border-r border-gray-200 w-20 hover:w-64 transition-all duration-300 group">
@@ -332,10 +373,9 @@ function MobileSidebarItem({ icon, label, onClick }) {
   );
 }
 
-/* ======================================================
+/* ========================================================
    HOME CONTENT
-====================================================== */
-
+======================================================== */
 function HomeContent({ setView }) {
   return (
     <div className="max-w-3xl mx-auto text-center space-y-10">
@@ -381,13 +421,98 @@ function FeatureCard({ title, desc }) {
   );
 }
 
-/* ======================================================
-   PROFILE PAGE (ONLY GAMES + EMOJIS)
-====================================================== */
+/* ========================================================
+   GROUPS VIEW
+======================================================== */
+function GroupsView({
+  groups,
+  loading,
+  creating,
+  groupName,
+  setGroupName,
+  setCreating,
+  createGroup,
+  groupCreatedMsg,
+  onBack,
+}) {
+  return (
+    <div className="max-w-3xl w-full bg-white rounded-3xl shadow-2xl p-8 space-y-6 border border-gray-200">
+      <div className="flex items-center justify-between">
+        <button onClick={onBack} className="flex items-center gap-2 text-gray-600 hover:text-gray-800">
+          <ArrowLeft className="w-5 h-5" /> Back
+        </button>
+
+        <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2">
+          <Group className="w-6 h-6 text-indigo-500" /> Your Groups
+        </h2>
+
+        <button
+          onClick={() => setCreating(true)}
+          className="px-3 py-1 bg-indigo-100 text-indigo-600 rounded-full hover:bg-indigo-200"
+        >
+          + Create
+        </button>
+      </div>
+
+      {/* SUCCESS MESSAGE */}
+      {groupCreatedMsg && (
+        <div className="flex items-center gap-2 p-3 bg-green-100 text-green-800 rounded-xl">
+          <CheckCircle2 className="w-5 h-5" />
+          {groupCreatedMsg}
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-center text-gray-500">Loading groups…</p>
+      ) : groups.length === 0 ? (
+        <p className="text-center text-gray-500">You are not in any groups yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {groups.map((g) => (
+            <div key={g.group_id} className="p-4 border bg-gray-50 rounded-2xl">
+              <p className="text-lg font-bold">{g.groups.name}</p>
+              <p className="text-xs text-gray-500">Group ID: {g.group_id}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* CREATE GROUP PANEL */}
+      {creating && (
+        <div className="p-4 border bg-gray-50 rounded-2xl space-y-3">
+          <input
+            className="w-full border rounded-xl p-3"
+            placeholder="Group name"
+            value={groupName}
+            onChange={(e) => setGroupName(e.target.value)}
+          />
+
+          <button
+            onClick={createGroup}
+            className="w-full bg-indigo-500 text-white py-3 rounded-xl font-bold hover:scale-105 transition"
+          >
+            Create
+          </button>
+
+          <button
+            onClick={() => setCreating(false)}
+            className="w-full py-2 text-gray-500"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ========================================================
+   PROFILE VIEW & CREATE/JOIN COMPONENT
+======================================================== */
 
 function ProfilePage({ profile, onEdit, onBack }) {
   return (
-    <div className="max-w-lg w-full bg-white rounded-3xl shadow-2xl p-10 space-y-8 border border-gray-200 text-center">
+    <div className="max-w-lg w-full bg-white rounded-3xl shadow-2xl p-10 space-y-8 border">
       <button onClick={onBack} className="flex items-center gap-2 text-gray-600 hover:text-gray-800">
         <ArrowLeft className="w-5 h-5" /> Back
       </button>
@@ -400,14 +525,14 @@ function ProfilePage({ profile, onEdit, onBack }) {
         Member since: {new Date(profile.created_at).toDateString()}
       </p>
 
-      <div className="grid grid-cols-2 gap-4 text-center">
+      <div className="grid grid-cols-2 gap-4">
         <StatCard label="Games Played" value={profile.games_played ?? 0} />
         <StatCard label="Emojis Sent" value={profile.emoji_used ?? 0} />
       </div>
 
       <button
         onClick={onEdit}
-        className="w-full bg-indigo-500 text-white py-4 rounded-xl font-bold hover:scale-105 transition flex items-center justify-center gap-2"
+        className="w-full bg-indigo-500 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:scale-105"
       >
         <Pencil className="w-5 h-5" /> Edit Profile
       </button>
@@ -417,53 +542,41 @@ function ProfilePage({ profile, onEdit, onBack }) {
 
 function StatCard({ label, value }) {
   return (
-    <div className="p-4 bg-gray-100 rounded-2xl shadow-inner">
+    <div className="p-4 bg-gray-100 rounded-xl shadow-inner">
       <div className="text-2xl font-black">{value}</div>
       <div className="text-sm text-gray-600">{label}</div>
     </div>
   );
 }
 
-/* ======================================================
-   PUBLIC ROOMS VIEW
-====================================================== */
-
 function PublicRoomsView({ loading, rooms, onRefresh, onJoin, onBack }) {
   return (
-    <div className="max-w-3xl w-full bg-white rounded-3xl shadow-2xl p-8 space-y-6 border border-gray-200">
+    <div className="max-w-3xl w-full bg-white rounded-3xl shadow-2xl p-8 space-y-6 border">
       <div className="flex items-center justify-between">
         <button onClick={onBack} className="flex items-center gap-2 text-gray-600 hover:text-gray-800">
           <ArrowLeft className="w-5 h-5" /> Back
         </button>
-
-        <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2">
-          <Globe2 className="w-5 h-5 text-indigo-500" /> Public Rooms
-        </h2>
-
-        <button
-          onClick={onRefresh}
-          className="text-sm px-3 py-1 rounded-full border border-gray-300 hover:bg-gray-100"
-        >
+        <h2 className="text-2xl font-black">Public Rooms</h2>
+        <button onClick={onRefresh} className="text-sm px-3 py-1 border rounded-full hover:bg-gray-100">
           Refresh
         </button>
       </div>
 
       {loading ? (
-        <p className="text-center text-gray-500">Loading public rooms…</p>
+        <p className="text-center text-gray-500">Loading…</p>
       ) : rooms.length === 0 ? (
-        <p className="text-center text-gray-500">No public rooms right now.</p>
+        <p className="text-center text-gray-500">No public rooms found.</p>
       ) : (
         <div className="space-y-3">
           {rooms.map((room) => (
-            <div key={room.id} className="flex items-center justify-between p-4 rounded-2xl border border-gray-200 bg-gray-50">
+            <div key={room.id} className="flex items-center justify-between p-4 border rounded-xl bg-gray-50">
               <div>
-                <p className="text-sm text-gray-500">Room Code</p>
-                <p className="text-xl font-mono tracking-[0.3em]">{room.code}</p>
+                <p className="text-xs text-gray-500">CODE</p>
+                <p className="text-xl font-mono tracking-widest">{room.code}</p>
               </div>
-
               <button
                 onClick={() => onJoin(room.code)}
-                className="px-4 py-2 bg-indigo-500 text-white rounded-xl font-semibold hover:scale-105 transition"
+                className="px-4 py-2 bg-indigo-500 text-white rounded-xl hover:scale-105"
               >
                 Join
               </button>
@@ -475,88 +588,46 @@ function PublicRoomsView({ loading, rooms, onRefresh, onJoin, onBack }) {
   );
 }
 
-/* ======================================================
-   GROUPS VIEW (LIST + CREATE)
-====================================================== */
-
-function GroupsView({ groups, loading, onReload, profile, onBack }) {
-  const [creating, setCreating] = useState(false);
-  const [groupName, setGroupName] = useState("");
-
-const createGroup = async (name: string, avatar: string, ownerId: string) => {
-  const { data, error } = await supabase
-    .from("groups")
-    .insert({
-      name,
-      avatar,
-      owner_id: ownerId,       // IMPORTANT
-    })
-    .select()
-    .single();
-
-  return { data, error };
-};
-
-
+function CreateJoinCard({
+  title,
+  roomCode,
+  setRoomCode,
+  loading,
+  onSubmit,
+  onBack,
+  buttonText,
+}) {
   return (
-    <div className="max-w-3xl w-full bg-white rounded-3xl shadow-2xl p-8 space-y-6 border border-gray-200">
-      <div className="flex items-center justify-between">
-        <button onClick={onBack} className="flex items-center gap-2 text-gray-600 hover:text-gray-800">
-          <ArrowLeft className="w-5 h-5" /> Back
-        </button>
+    <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 border space-y-6">
 
-        <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2">
-          <Group className="w-5 h-5 text-indigo-500" /> Groups
-        </h2>
+      <button onClick={onBack} className="text-gray-500 hover:text-gray-700">
+        ← Back
+      </button>
 
-        <button
-          onClick={() => setCreating(true)}
-          className="text-sm px-3 py-1 rounded-full bg-indigo-100 text-indigo-600 hover:bg-indigo-200 transition"
-        >
-          + Create
-        </button>
-      </div>
+      <h2 className="text-3xl font-black">{title}</h2>
 
-      {loading ? (
-        <p className="text-center text-gray-500">Loading groups…</p>
-      ) : groups.length === 0 ? (
-        <p className="text-center text-gray-500">You're not in any groups yet.</p>
-      ) : (
-        <div className="space-y-3">
-          {groups.map((g) => (
-            <div key={g.group_id} className="p-4 border bg-gray-50 rounded-2xl">
-              <p className="text-lg font-bold">{g.groups.name}</p>
-              <p className="text-xs text-gray-500">Group ID: {g.group_id}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {creating && (
-        <div className="p-4 rounded-2xl border bg-gray-50 space-y-3">
+      {setRoomCode && (
+        <>
+          <label className="text-sm font-bold">Room Code</label>
           <input
-            className="w-full border rounded-xl p-3"
-            placeholder="Group name"
-            value={groupName}
-            onChange={(e) => setGroupName(e.target.value)}
+            value={roomCode}
+            onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+            maxLength={6}
+            className="w-full border-2 rounded-xl px-4 py-3 text-center font-bold tracking-widest"
           />
-
-          <button
-            onClick={() => createGroup(groupName, "👥", profile.id)}
-
-            className="w-full bg-indigo-500 text-white py-3 rounded-xl font-bold"
-          >
-            Create Group
-          </button>
-        </div>
+        </>
       )}
+
+      <button
+        onClick={onSubmit}
+        disabled={loading}
+        className="w-full bg-indigo-500 text-white py-4 rounded-xl font-bold hover:scale-105 disabled:opacity-50"
+      >
+        {loading ? "Loading…" : buttonText}
+      </button>
     </div>
   );
 }
-
-/* ======================================================
-   PROFILE EDIT MODAL
-====================================================== */
 
 function ProfileEditModal({
   profileName,
@@ -567,27 +638,24 @@ function ProfileEditModal({
   onClose,
 }) {
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
       <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md space-y-6">
-        <h2 className="text-3xl font-black text-gray-800">Edit Profile</h2>
+        <h2 className="text-3xl font-black">Edit Profile</h2>
 
         <input
           value={profileName}
           onChange={(e) => setProfileName(e.target.value)}
-          placeholder="Your Name"
           className="w-full border-2 rounded-xl px-4 py-3"
         />
 
-        <label className="font-bold text-sm text-gray-600">Choose Avatar</label>
+        <label className="text-sm font-bold">Choose Avatar</label>
         <div className="grid grid-cols-8 gap-2">
           {AVATARS.map((em) => (
             <button
               key={em}
               onClick={() => setProfileAvatar(em)}
               className={`text-3xl p-2 rounded-xl ${
-                profileAvatar === em
-                  ? "bg-indigo-100 ring-2 ring-indigo-500 scale-110"
-                  : "bg-gray-50"
+                profileAvatar === em ? "bg-indigo-100 ring-2 ring-indigo-500" : "bg-gray-100"
               }`}
             >
               {em}
@@ -603,55 +671,10 @@ function ProfileEditModal({
           Save
         </button>
 
-        <button onClick={onClose} className="w-full py-3 text-gray-500 font-medium">
+        <button onClick={onClose} className="w-full text-gray-500 py-2">
           Cancel
         </button>
       </div>
-    </div>
-  );
-}
-
-function CreateJoinCard({
-  title,
-  roomCode,
-  setRoomCode,
-  loading,
-  onSubmit,
-  onBack,
-  buttonText,
-}) {
-  return (
-    <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 space-y-6 border border-gray-200">
-
-      {/* Back Button */}
-      <button onClick={onBack} className="text-gray-500 hover:text-gray-700">
-        ← Back
-      </button>
-
-      {/* Title */}
-      <h2 className="text-3xl font-black text-gray-800">{title}</h2>
-
-      {/* Room Code Input (Only for Join Room) */}
-      {setRoomCode && (
-        <>
-          <label className="block text-sm font-bold">Room Code</label>
-          <input
-            value={roomCode}
-            onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-            maxLength={6}
-            className="w-full border-2 rounded-xl px-4 py-3 text-center font-bold tracking-widest"
-          />
-        </>
-      )}
-
-      {/* Submit Button */}
-      <button
-        onClick={onSubmit}
-        disabled={loading}
-        className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-4 rounded-xl font-bold hover:scale-105 transition disabled:opacity-50"
-      >
-        {loading ? "Loading…" : buttonText}
-      </button>
     </div>
   );
 }
