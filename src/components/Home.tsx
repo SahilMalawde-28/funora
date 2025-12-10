@@ -542,7 +542,8 @@ const createGroup = async (name: string, avatar: string, ownerId: string) => {
           />
 
           <button
-            onClick={createGroup}
+            onClick={() => createGroup(groupName, "👥", profile.id)}
+
             className="w-full bg-indigo-500 text-white py-3 rounded-xl font-bold"
           >
             Create Group
