@@ -494,11 +494,12 @@ const handleEndGame = async (results?: Record<string, boolean>) => {
   if (!room || !currentPlayer) {
   return (
     <Home
-      onCreateRoom={handleCreateRoom}
-      onJoinRoom={handleJoinRoom}
-      profile={profile}
-      onStartGroupGame={handleStartGroupGame}
-    />
+  onCreateRoom={handleCreateRoom}
+  onJoinRoom={handleJoinRoom}
+  profile={profile}
+  onStartGroupGame={handleStartGroupGame}   // <-- ADD THIS
+/>
+
   );
 }
 
