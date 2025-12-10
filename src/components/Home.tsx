@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { AVATARS } from "../lib/gameLogic";
+import Groups from "./Groups";
+
 
 interface HomeProps {
   onCreateRoom: (name: string, avatar: string) => void;
