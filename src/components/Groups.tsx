@@ -292,7 +292,7 @@ export default function Groups({
     });
 
     if (mErr) {
-      console.error("Error joining group:", mErr);
+      console.      console.error("Error joining group:", mErr);
       alert("Failed to join group");
       setBusyAction(false);
       return;
@@ -794,14 +794,14 @@ export default function Groups({
           onTouchEnd={onTouchEnd}
         >
           <div
-            className="flex h-full transition-transform duration-300"
+            className="flex h-full w-[300%] transition-transform duration-300" // FIXED: Set container width to 300%
             style={{ transform: `translateX(-${mobilePage * 100}%)` }}  // EXACT full-page snap
           >
 
             {/* ----------------------------------
                 PANEL 0 — GROUPS LIST
             ----------------------------------- */}
-            <div className="w-full min-w-full flex-shrink-0 overflow-y-auto bg-gray-50">
+            <div className="w-1/3 flex-shrink-0 overflow-y-auto bg-gray-50"> {/* FIXED: Set panel width to 1/3 */}
               <div className="p-3">
                 <div className="flex items-center justify-between mb-2">
                   <div className="font-semibold">My Groups</div>
@@ -872,7 +872,7 @@ export default function Groups({
             {/* ----------------------------------
                 PANEL 1 — CHAT
             ----------------------------------- */}
-            <div className="w-full min-w-full flex-shrink-0 flex flex-col overflow-y-auto">
+            <div className="w-1/3 flex-shrink-0 flex flex-col overflow-y-auto"> {/* FIXED: Set panel width to 1/3 */}
               {!selectedGroup ? (
                 <div className="flex-1 flex items-center justify-center text-gray-400 p-4">
                   Select a group to begin.
@@ -1007,7 +1007,7 @@ export default function Groups({
             {/* ----------------------------------
                 PANEL 2 — MEMBERS
             ----------------------------------- */}
-            <div className="w-full min-w-full flex-shrink-0 overflow-y-auto bg-white">
+            <div className="w-1/3 flex-shrink-0 overflow-y-auto bg-white"> {/* FIXED: Set panel width to 1/3 */}
               <div className="px-4 py-2 border-b">
                 <div className="flex items-center gap-2">
                   <Users className="w-5 h-5 text-indigo-600" />
