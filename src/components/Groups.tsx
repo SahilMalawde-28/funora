@@ -996,7 +996,7 @@ export default function Groups({
                           className="text-indigo-600 text-[10px] font-semibold flex items-center gap-1 hover:text-indigo-800"
                         >
                           <Copy className="w-3 h-3" />
-                          <span className="truncate max-w-[80px]">{selectedGroupId}</span>
+                          <span className="truncate max-w-[80px]">Group ID: {selectedGroupId}</span>
                         </button>
                       )}
                     </div>
@@ -1162,7 +1162,7 @@ export default function Groups({
             </span>
           </div>
           
-          {/* FIX: Moved Copy ID button to the mobile header when in Chat/Members view */}
+          {/* FIX: Copy ID button for Chat/Members view */}
           {selectedGroupId && (mobilePage === 1 || mobilePage === 2) && (
             <button
                 onClick={handleCopyCode}
@@ -1191,7 +1191,8 @@ export default function Groups({
           {mobilePage === 0 && <GroupsListPanel />}
           {mobilePage === 1 && selectedGroupId && <ChatPanel />}
           {mobilePage === 2 && selectedGroupId && <MembersPanel />}
-          {mobilePagePage === 3 && <CreateGroupForm />} 
+          {mobilePage === 3 && <CreateGroupForm />} 
+          {/* FIX: Corrected typo from 'mobilePagePage' to 'mobilePage' */}
           {mobilePage === 4 && <JoinGroupForm />}
         
           {/* Default State when Chat/Members is selected but no Group is set */}
