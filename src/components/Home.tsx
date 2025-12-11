@@ -23,6 +23,7 @@ interface HomeProps {
   onJoinRoom: (code: string, name: string, avatar: string) => void;
   profile: any;
   onStartGroupGame?: (args: { group: any; members: any[] }) => any; // <-- Add this
+  onQuickJoinRoom?: (code: string) => Promise<any>;
 }
 
 
