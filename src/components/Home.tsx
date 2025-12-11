@@ -33,7 +33,8 @@ export default function Home({
   onCreateRoom, 
   onJoinRoom, 
   profile, 
-  onStartGroupGame        // <-- ADD THIS HERE!!
+  onStartGroupGame,
+  onQuickJoinRoom,// <-- ADD THIS HERE!!
 }) {
  
   const [view, setView] = useState<
