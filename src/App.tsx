@@ -249,7 +249,14 @@ const handleStartGroupGame = async ({
   }
 
   // 1. Create a new room (host = THIS browser's playerId)
-  const newRoom = await createRoom(playerId);
+ const newRoom = await createRoom(playerId);
+
+// Mark this room as a "group room"
+await supabase
+  .from("rooms")
+  .update({ group_id: group.id })
+  .eq("id", newRoom.id);
+
 
   // 2. Join this user into the room as usual
   const { room: joinedRoom, player } = await joinRoom(
