@@ -506,8 +506,9 @@ export default function Groups({
     RENDER
   ------------------------------------------------- */
   return (
-    // FIX: Added 'overflow-x-hidden' to the main container
+    // FIX 1: Added overflow-x-hidden to the component wrapper to prevent horizontal scrolling of the page/window.
     <div className="relative w-full h-[80vh] max-h-[900px] bg-white rounded-3xl shadow-2xl border overflow-hidden overflow-x-hidden"> 
+      
       {/* DESKTOP 3-column layout */}
       <div className="hidden md:flex h-full">
         {/* LEFT: Groups List */}
@@ -743,7 +744,8 @@ export default function Groups({
       </div>
 
       {/* MOBILE: sliding panels (visible under md) */}
-      <div className="md:hidden flex flex-col h-full">
+      {/* FIX 2: Added w-full to ensure this container respects the parent's boundaries */}
+      <div className="md:hidden flex flex-col h-full w-full">
 
         {/* ---------- TOP NAV ---------- */}
         <div className="flex items-center justify-between px-4 py-2 border-b bg-white z-20">
@@ -789,18 +791,18 @@ export default function Groups({
 
         {/* ---------- FIXED SLIDER WRAPPER ---------- */}
         <div
-          className="relative flex-1 overflow-hidden"  // Prevents horizontal scroll inside this container
+          className="relative flex-1 overflow-hidden"  // This is essential to hide content outside the viewport
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
         >
           <div
-            className="flex h-full w-[300%] transition-transform duration-300" 
+            className="flex h-full w-[300%] transition-transform duration-300" // 300% width for three panels
             style={{ transform: `translateX(-${mobilePage * 100}%)` }}  
           >
 
             {/* ----------------------------------
-                PANEL 0 — GROUPS LIST
+                PANEL 0 — GROUPS LIST (w-1/3)
             ----------------------------------- */}
             <div className="w-1/3 flex-shrink-0 overflow-y-auto bg-gray-50"> 
               <div className="p-3">
@@ -827,7 +829,7 @@ export default function Groups({
                         key={m.id}
                         onClick={() => {
                           setSelectedGroupId(g.id);
-                          setMobilePage(1);
+                          setMobilePage(1); // Navigates to chat panel on group selection
                         }}
                         className={`w-full flex items-center gap-3 px-3 py-3 text-left rounded ${
                           active ? "bg-indigo-50" : "hover:bg-gray-100"
@@ -871,7 +873,7 @@ export default function Groups({
             </div>
 
             {/* ----------------------------------
-                PANEL 1 — CHAT
+                PANEL 1 — CHAT (w-1/3)
             ----------------------------------- */}
             <div className="w-1/3 flex-shrink-0 flex flex-col overflow-y-auto"> 
               {!selectedGroup ? (
@@ -1006,7 +1008,7 @@ export default function Groups({
             </div>
 
             {/* ----------------------------------
-                PANEL 2 — MEMBERS
+                PANEL 2 — MEMBERS (w-1/3)
             ----------------------------------- */}
             <div className="w-1/3 flex-shrink-0 overflow-y-auto bg-white"> 
               <div className="px-4 py-2 border-b">
