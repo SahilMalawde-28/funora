@@ -741,41 +741,67 @@ export default function Groups({
         </div>
       </div>
 
-      {/* MOBILE: sliding panels (visible under md) */}
-      <div className="md:hidden h-full flex flex-col">
-        {/* top nav */}
-        <div className="flex items-center justify-between px-4 py-2 border-b">
-          <div className="flex items-center gap-2">
-            {onBack && (
-              <button onClick={onBack} className="p-1 rounded-full hover:bg-gray-100">
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-            )}
-            <Users className="w-5 h-5 text-indigo-600" />
-            <span className="font-bold">Groups</span>
-          </div>
+     {/* MOBILE: sliding panels (visible under md) */}
+<div className="md:hidden flex flex-col h-full">
 
-          <div className="flex items-center gap-1 text-xs">
-            <button
-              onClick={() => setMobilePage(0)}
-              className={`px-3 py-1 rounded-full ${mobilePage === 0 ? "bg-indigo-500 text-white" : "bg-gray-100"}`}
-            >
-              Groups
-            </button>
-            <button
-              onClick={() => setMobilePage(1)}
-              className={`px-3 py-1 rounded-full ${mobilePage === 1 ? "bg-indigo-500 text-white" : "bg-gray-100"}`}
-            >
-              Chat
-            </button>
-            <button
-              onClick={() => setMobilePage(2)}
-              className={`px-3 py-1 rounded-full ${mobilePage === 2 ? "bg-indigo-500 text-white" : "bg-gray-100"}`}
-            >
-              Members
-            </button>
-          </div>
-        </div>
+  {/* Top navigation */}
+  <div className="flex items-center justify-between px-4 py-2 border-b bg-white z-20">
+    <div className="flex items-center gap-2">
+      {onBack && (
+        <button onClick={onBack} className="p-1 rounded-full hover:bg-gray-100">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+      )}
+      <Users className="w-5 h-5 text-indigo-600" />
+      <span className="font-bold">Groups</span>
+    </div>
+
+    <div className="flex items-center gap-1 text-xs">
+      {["Groups", "Chat", "Members"].map((label, i) => (
+        <button
+          key={label}
+          onClick={() => setMobilePage(i)}
+          className={`px-3 py-1 rounded-full ${
+            mobilePage === i
+              ? "bg-indigo-500 text-white"
+              : "bg-gray-100 text-gray-700"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  </div>
+
+  {/* SLIDER WRAPPER - important fix */}
+  <div
+    className="relative flex-1 overflow-hidden"   // <-- THIS FIXES MULTIPLE SCREENS SHOWING
+    onTouchStart={onTouchStart}
+    onTouchMove={onTouchMove}
+    onTouchEnd={onTouchEnd}
+  >
+    <div
+      className="flex h-full transition-transform duration-300"
+      style={{ transform: `translateX(-${mobilePage * 100}%)` }}  // <-- EXACT PAGE WIDTH
+    >
+      {/* PANEL 0 */}
+      <div className="w-full min-w-full flex-shrink-0 overflow-y-auto bg-gray-50">
+        { /* your Group List content here */ }
+      </div>
+
+      {/* PANEL 1 */}
+      <div className="w-full min-w-full flex-shrink-0 overflow-y-auto bg-white">
+        { /* your Chat content here */ }
+      </div>
+
+      {/* PANEL 2 */}
+      <div className="w-full min-w-full flex-shrink-0 overflow-y-auto bg-white">
+        { /* your Members content here */ }
+      </div>
+    </div>
+  </div>
+</div>
+
 
         {/* sliding container */}
         <div
