@@ -127,9 +127,10 @@ export default function Groups({
       setSelectedGroupId(data[0].group_id);
     }
     
-    // Reset group creation/joining state after loading groups
-    setCreating(false);
-    setJoining(false);
+    // NOTE: Removed setCreating(false) and setJoining(false) here. 
+    // They are correctly reset after successful creation/joining 
+    // or when the user manually cancels the form. This prevents 
+    // interrupting typing during background reloads.
 
     setLoadingGroups(false);
   };
@@ -505,6 +506,7 @@ export default function Groups({
         <p className="text-gray-500 text-sm">Start a new party for you and your friends.</p>
         <input
             value={newGroupName}
+            // Fix input behavior: Ensure onChange is correct
             onChange={(e) => setNewGroupName(e.target.value)}
             placeholder="Group Name (e.g., The Quiz Masters)"
             className="p-3 border rounded-xl text-sm w-full focus:ring-indigo-500 focus:border-indigo-500"
@@ -538,6 +540,7 @@ export default function Groups({
         <p className="text-gray-500 text-sm">Ask the group owner for the unique ID code.</p>
         <input
             value={joinCode}
+            // Fix input behavior: Ensure onChange is correct
             onChange={(e) => setJoinCode(e.target.value)}
             placeholder="Enter Group ID"
             className="p-3 border rounded-xl text-sm w-full focus:ring-indigo-500 focus:border-indigo-500"
@@ -1192,7 +1195,6 @@ export default function Groups({
           {mobilePage === 1 && selectedGroupId && <ChatPanel />}
           {mobilePage === 2 && selectedGroupId && <MembersPanel />}
           {mobilePage === 3 && <CreateGroupForm />} 
-          {/* FIX: Corrected typo from 'mobilePagePage' to 'mobilePage' */}
           {mobilePage === 4 && <JoinGroupForm />}
         
           {/* Default State when Chat/Members is selected but no Group is set */}
