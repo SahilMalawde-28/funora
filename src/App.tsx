@@ -550,6 +550,11 @@ const handleEndGame = async (results?: Record<string, boolean>) => {
           </div>
         )}
       </>
+      {/* GROUP CHAT — only visible if room belongs to a group AND game is running */}
+{room?.group_id && room.current_game && (
+  <FloatingGroupChat groupId={room.group_id} profile={profile} />
+)}
+
 
       {/* GAME OR LOBBY */}
       {room.status === "lobby" || !room.current_game ? (
