@@ -741,10 +741,10 @@ export default function Groups({
         </div>
       </div>
 
-     {/* MOBILE: sliding panels (visible under md) */}
+{/* MOBILE: sliding panels (visible under md) */}
 <div className="md:hidden flex flex-col h-full">
 
-  {/* Top navigation */}
+  {/* ---------- TOP NAV ---------- */}
   <div className="flex items-center justify-between px-4 py-2 border-b bg-white z-20">
     <div className="flex items-center gap-2">
       {onBack && (
@@ -757,285 +757,320 @@ export default function Groups({
     </div>
 
     <div className="flex items-center gap-1 text-xs">
-      {["Groups", "Chat", "Members"].map((label, i) => (
-        <button
-          key={label}
-          onClick={() => setMobilePage(i)}
-          className={`px-3 py-1 rounded-full ${
-            mobilePage === i
-              ? "bg-indigo-500 text-white"
-              : "bg-gray-100 text-gray-700"
-          }`}
-        >
-          {label}
-        </button>
-      ))}
+      <button
+        onClick={() => setMobilePage(0)}
+        className={`px-3 py-1 rounded-full ${
+          mobilePage === 0 ? "bg-indigo-500 text-white" : "bg-gray-100"
+        }`}
+      >
+        Groups
+      </button>
+
+      <button
+        onClick={() => setMobilePage(1)}
+        className={`px-3 py-1 rounded-full ${
+          mobilePage === 1 ? "bg-indigo-500 text-white" : "bg-gray-100"
+        }`}
+      >
+        Chat
+      </button>
+
+      <button
+        onClick={() => setMobilePage(2)}
+        className={`px-3 py-1 rounded-full ${
+          mobilePage === 2 ? "bg-indigo-500 text-white" : "bg-gray-100"
+        }`}
+      >
+        Members
+      </button>
     </div>
   </div>
 
-  {/* SLIDER WRAPPER - important fix */}
+  {/* ---------- FIXED SLIDER WRAPPER ---------- */}
   <div
-    className="relative flex-1 overflow-hidden"   // <-- THIS FIXES MULTIPLE SCREENS SHOWING
+    className="relative flex-1 overflow-hidden"  // prevents showing all pages
     onTouchStart={onTouchStart}
     onTouchMove={onTouchMove}
     onTouchEnd={onTouchEnd}
   >
     <div
       className="flex h-full transition-transform duration-300"
-      style={{ transform: `translateX(-${mobilePage * 100}%)` }}  // <-- EXACT PAGE WIDTH
+      style={{ transform: `translateX(-${mobilePage * 100}%)` }}  // EXACT full-page snap
     >
-      {/* PANEL 0 */}
+
+      {/* ----------------------------------
+          PANEL 0 — GROUPS LIST
+      ----------------------------------- */}
       <div className="w-full min-w-full flex-shrink-0 overflow-y-auto bg-gray-50">
-        { /* your Group List content here */ }
+        <div className="p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-semibold">My Groups</div>
+            <button
+              onClick={loadGroups}
+              className="text-xs px-2 py-1 rounded bg-gray-200"
+            >
+              {loadingGroups ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                "↻"
+              )}
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {memberships.map((m) => {
+              const g = m.groups;
+              const active = g.id === selectedGroupId;
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    setSelectedGroupId(g.id);
+                    setMobilePage(1);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-3 text-left rounded ${
+                    active ? "bg-indigo-50" : "hover:bg-gray-100"
+                  }`}
+                >
+                  <span className="text-2xl">{g.avatar}</span>
+                  <div className="flex-1">
+                    <div className="font-semibold text-sm">{g.name}</div>
+                    <div className="text-[11px] text-gray-500">
+                      {m.role}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* create / join */}
+        <div className="p-3 border-t space-y-2">
+          <button
+            onClick={() => {
+              setCreating(true);
+              setJoining(false);
+            }}
+            className="w-full bg-indigo-500 text-white py-2 rounded-xl text-sm font-semibold"
+          >
+            <Plus className="w-4 h-4 inline-block mr-2" /> New Group
+          </button>
+
+          <button
+            onClick={() => {
+              setJoining(true);
+              setCreating(false);
+            }}
+            className="w-full bg-gray-200 text-gray-800 py-2 rounded-xl text-sm font-semibold"
+          >
+            Join with Code
+          </button>
+        </div>
       </div>
 
-      {/* PANEL 1 */}
-      <div className="w-full min-w-full flex-shrink-0 overflow-y-auto bg-white">
-        { /* your Chat content here */ }
+      {/* ----------------------------------
+          PANEL 1 — CHAT
+      ----------------------------------- */}
+      <div className="w-full min-w-full flex-shrink-0 flex flex-col overflow-y-auto">
+        {!selectedGroup ? (
+          <div className="flex-1 flex items-center justify-center text-gray-400 p-4">
+            Select a group to begin.
+          </div>
+        ) : (
+          <>
+            {/* chat header */}
+            <div className="px-4 py-2 border-b flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{selectedGroup.avatar}</span>
+                <div>
+                  <div className="font-semibold">{selectedGroup.name}</div>
+                  <div className="text-xs text-gray-500">
+                    {members.length} member{members.length !== 1 && "s"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleStartGameClick}
+                  className="bg-indigo-500 text-white px-3 py-1.5 rounded text-sm"
+                >
+                  <Gamepad2 className="w-4 h-4 inline-block" />
+                </button>
+
+                <button
+                  onClick={handleLeaveGroup}
+                  className="bg-red-50 text-red-600 px-3 py-1.5 rounded text-sm"
+                >
+                  <LogOut className="w-4 h-4 inline-block" />
+                </button>
+              </div>
+            </div>
+
+            {/* chat messages */}
+            <div className="flex-1 overflow-auto p-3 space-y-3">
+              {loadingMessages ? (
+                <div className="text-xs text-gray-500">Loading messages…</div>
+              ) : messages.length === 0 ? (
+                <div className="text-xs text-gray-400">
+                  No messages yet. Say hi 👋
+                </div>
+              ) : (
+                messages.map((msg) => {
+                  const mine = msg.profile_id === profile.id;
+                  const code = extractRoomCode(msg.content);
+
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex gap-2 ${
+                        mine ? "justify-end" : "justify-start"
+                      }`}
+                    >
+                      {!mine && (
+                        <div className="text-xl mt-1">
+                          {msg.profiles?.avatar || "🙂"}
+                        </div>
+                      )}
+
+                      <div
+                        className={`max-w-[76%] px-3 py-2 rounded-2xl text-sm ${
+                          mine
+                            ? "bg-indigo-500 text-white"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        <div className="font-semibold text-xs mb-1">
+                          {msg.profiles?.name}
+                        </div>
+
+                        <div className="whitespace-pre-wrap">
+                          {msg.content}
+                        </div>
+
+                        {code && (
+                          <div className="mt-2">
+                            <button
+                              onClick={() => handleQuickJoin(code)}
+                              className={`px-2 py-1 text-[13px] rounded-full ${
+                                mine
+                                  ? "bg-white text-indigo-600"
+                                  : "bg-indigo-500 text-white"
+                              }`}
+                            >
+                              Join {code}
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="mt-1 text-[11px] text-gray-400">
+                          {new Date(msg.created_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </div>
+                      </div>
+
+                      {mine && (
+                        <div className="text-xl mt-1">
+                          {msg.profiles?.avatar || profile.avatar}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* chat input */}
+            <div className="p-3 border-t flex items-center gap-2">
+              <input
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                placeholder="Type a message…"
+                className="flex-1 px-3 py-2 border rounded-xl text-sm"
+              />
+
+              <button
+                onClick={handleSendMessage}
+                className="bg-indigo-500 text-white px-3 py-2 rounded-xl"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* PANEL 2 */}
+      {/* ----------------------------------
+          PANEL 2 — MEMBERS
+      ----------------------------------- */}
       <div className="w-full min-w-full flex-shrink-0 overflow-y-auto bg-white">
-        { /* your Members content here */ }
+        <div className="px-4 py-2 border-b">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-indigo-600" />
+            <div className="font-semibold">Members</div>
+          </div>
+        </div>
+
+        <div className="p-3 space-y-3">
+          {loadingMembers ? (
+            <div className="text-xs text-gray-500">Loading members…</div>
+          ) : members.length === 0 ? (
+            <div className="text-xs text-gray-400">No members in this group.</div>
+          ) : (
+            members.map((m) => {
+              const p = m.profiles;
+              const isMe = p.id === profile.id;
+
+              return (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"
+                >
+                  <div className="text-2xl">{p.avatar}</div>
+
+                  <div className="flex-1">
+                    <div className="font-semibold">
+                      {p.name}{" "}
+                      {isMe && (
+                        <span className="text-xs text-indigo-500">(you)</span>
+                      )}
+                    </div>
+
+                    <div className="text-xs text-gray-500">{m.role}</div>
+                  </div>
+
+                  {isOwner && !isMe && (
+                    <div className="flex gap-2">
+                      {m.role === "member" && (
+                        <button
+                          onClick={() => handlePromoteToAdmin(m)}
+                          className="p-2 bg-indigo-100 rounded"
+                        >
+                          <Shield className="w-4 h-4 text-indigo-700" />
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => handleKickMember(m)}
+                        className="p-2 bg-red-50 rounded"
+                      >
+                        <XCircle className="w-4 h-4 text-red-600" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
     </div>
   </div>
 </div>
 
-
-        {/* sliding container */}
-        <div
-          className="flex-1 flex overflow-hidden relative"
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-        >
-          <div
-            className="flex h-full w-[300%] transition-transform duration-300"
-            style={{ transform: `translateX(-${mobilePage * (100 / 3)}%)` }}
-          >
-            {/* panel 0: groups list (mobile) */}
-            <div className="w-full min-w-0 bg-gray-50 border-r p-0 overflow-auto">
-              <div className="p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="font-semibold">My Groups</div>
-                  <button onClick={loadGroups} className="text-xs px-2 py-1 rounded bg-gray-200">
-                    {loadingGroups ? <Loader2 className="w-3 h-3 animate-spin" /> : "↻"}
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  {memberships.map((m) => {
-                    const g = m.groups;
-                    const active = g.id === selectedGroupId;
-                    return (
-                      <button
-                        key={m.id}
-                        onClick={() => {
-                          setSelectedGroupId(g.id);
-                          setMobilePage(1); // go to chat
-                        }}
-                        className={`w-full flex items-center gap-3 px-3 py-3 text-left rounded ${active ? "bg-indigo-50" : "hover:bg-gray-100"}`}
-                      >
-                        <span className="text-2xl">{g.avatar}</span>
-                        <div className="flex-1">
-                          <div className="font-semibold text-sm">{g.name}</div>
-                          <div className="text-[11px] text-gray-500">
-                            {m.role === "owner" ? "Owner" : m.role === "admin" ? "Admin" : "Member"}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="p-3 border-t space-y-2">
-                <button
-                  onClick={() => {
-                    setCreating(true);
-                    setJoining(false);
-                  }}
-                  className="w-full bg-indigo-500 text-white py-2 rounded-xl text-sm font-semibold"
-                >
-                  <Plus className="w-4 h-4 inline-block mr-2" /> New Group
-                </button>
-
-                <button
-                  onClick={() => {
-                    setJoining(true);
-                    setCreating(false);
-                  }}
-                  className="w-full bg-gray-200 text-gray-800 py-2 rounded-xl text-sm font-semibold"
-                >
-                  Join with Code
-                </button>
-              </div>
-            </div>
-
-            {/* panel 1: chat (mobile) */}
-            <div className="w-full min-w-0 flex flex-col">
-              {!selectedGroup ? (
-                <div className="flex-1 flex items-center justify-center text-gray-400 p-4">Select a group to begin.</div>
-              ) : (
-                <>
-                  <div className="px-4 py-2 border-b flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{selectedGroup.avatar}</span>
-                      <div>
-                        <div className="font-semibold">{selectedGroup.name}</div>
-                        <div className="text-xs text-gray-500">{members.length} member{members.length !== 1 && "s"}</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button onClick={handleStartGameClick} className="bg-indigo-500 text-white px-3 py-1.5 rounded text-sm">
-                        <Gamepad2 className="w-4 h-4 inline-block" />
-                      </button>
-                      <button onClick={handleLeaveGroup} className="bg-red-50 text-red-600 px-3 py-1.5 rounded text-sm">
-                        <LogOut className="w-4 h-4 inline-block" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 overflow-auto p-3 space-y-3">
-                    {loadingMessages ? (
-                      <div className="text-xs text-gray-500">Loading messages…</div>
-                    ) : messages.length === 0 ? (
-                      <div className="text-xs text-gray-400">No messages yet. Say hi 👋</div>
-                    ) : (
-                      messages.map((msg) => {
-                        const mine = msg.profile_id === profile.id;
-                        const code = extractRoomCode(msg.content || "");
-                        return (
-                          <div key={msg.id} className={`flex gap-2 ${mine ? "justify-end" : "justify-start"}`}>
-                            {!mine && <div className="text-xl mt-1">{msg.profiles?.avatar || "🙂"}</div>}
-
-                            <div className={`max-w-[76%] px-3 py-2 rounded-2xl text-sm ${mine ? "bg-indigo-500 text-white" : "bg-gray-100 text-gray-800"}`}>
-                              <div className="font-semibold text-xs mb-1">{msg.profiles?.name}</div>
-                              <div className="whitespace-pre-wrap">{msg.content}</div>
-
-                              {code && (
-                                <div className="mt-2">
-                                  <button onClick={() => handleQuickJoin(code)} className={`px-2 py-1 text-[13px] rounded-full ${mine ? "bg-white text-indigo-600" : "bg-indigo-500 text-white"}`}>
-                                    Join {code}
-                                  </button>
-                                </div>
-                              )}
-
-                              <div className="mt-1 text-[11px] text-gray-400">{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
-                            </div>
-
-                            {mine && <div className="text-xl mt-1">{msg.profiles?.avatar || profile.avatar}</div>}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-
-                  <div className="p-3 border-t flex items-center gap-2">
-                    <input
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                      placeholder="Type a message…"
-                      className="flex-1 px-3 py-2 border rounded-xl text-sm"
-                    />
-                    <button onClick={handleSendMessage} className="bg-indigo-500 text-white px-3 py-2 rounded-xl">
-                      <Send className="w-4 h-4" />
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* panel 2: members (mobile) */}
-            <div className="w-full min-w-0 bg-white">
-              <div className="px-4 py-2 border-b">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Users className="w-5 h-5 text-indigo-600" />
-                    <div className="font-semibold">Members</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-3 overflow-auto space-y-3">
-                {loadingMembers ? (
-                  <div className="text-xs text-gray-500">Loading members…</div>
-                ) : members.length === 0 ? (
-                  <div className="text-xs text-gray-400">No members in this group.</div>
-                ) : (
-                  members.map((m) => {
-                    const p = m.profiles;
-                    const isMe = p.id === profile.id;
-                    return (
-                      <div key={m.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                        <div className="text-2xl">{p.avatar}</div>
-                        <div className="flex-1">
-                          <div className="font-semibold">{p.name} {isMe && <span className="text-xs text-indigo-500">(you)</span>}</div>
-                          <div className="text-xs text-gray-500">{m.role}</div>
-                        </div>
-
-                        {isOwner && !isMe && (
-                          <div className="flex gap-2">
-                            {m.role === "member" && (
-                              <button onClick={() => handlePromoteToAdmin(m)} className="p-2 rounded bg-indigo-100">
-                                <Shield className="w-4 h-4 text-indigo-700" />
-                              </button>
-                            )}
-                            <button onClick={() => handleKickMember(m)} className="p-2 rounded bg-red-50">
-                              <XCircle className="w-4 h-4 text-red-600" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* CREATE / JOIN MODAL (shared) */}
-      {(creating || joining) && (
-        <div className="absolute bottom-6 left-6 w-80 bg-white border shadow-xl rounded-2xl p-4 space-y-3 z-40">
-          <div className="flex justify-between items-center">
-            <span className="font-bold text-sm">{creating ? "Create Group" : "Join Group"}</span>
-            <button
-              onClick={() => {
-                setCreating(false);
-                setJoining(false);
-                setNewGroupName("");
-                setJoinCode("");
-              }}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ✕
-            </button>
-          </div>
-
-          {creating && (
-            <>
-              <input value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} className="w-full border rounded-xl px-3 py-2" placeholder="Group name" />
-              <button disabled={!newGroupName.trim() || busyAction} onClick={handleCreateGroup} className="w-full bg-indigo-500 text-white py-2 rounded-xl">
-                {busyAction ? "Creating…" : "Create"}
-              </button>
-            </>
-          )}
-
-          {joining && (
-            <>
-              <input value={joinCode} onChange={(e) => setJoinCode(e.target.value)} className="w-full border rounded-xl px-3 py-2 font-mono" placeholder="Group ID" />
-              <button disabled={!joinCode.trim() || busyAction} onClick={handleJoinGroup} className="w-full bg-gray-800 text-white py-2 rounded-xl">
-                {busyAction ? "Joining…" : "Join"}
-              </button>
-            </>
-          )}
-        </div>
-      )}
-    </div>
   );
 }
