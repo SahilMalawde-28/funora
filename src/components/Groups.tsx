@@ -1063,12 +1063,7 @@ export default function Groups({
                     </div>
                   )}
                 </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+             
 
+  );
+}
