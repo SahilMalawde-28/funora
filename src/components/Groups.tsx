@@ -1,5 +1,5 @@
 // src/components/Groups.tsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Crown,
@@ -68,6 +68,82 @@ interface GroupsProps {
   onBack?: () => void;
 }
 
+// --- Memoized Form Components for Stability ---
+
+interface FormProps {
+    busyAction: boolean;
+    onCancel: () => void;
+}
+
+// Helper component: Create Group Form (Memoized for stability)
+const MemoCreateGroupForm = React.memo(({ busyAction, onCancel, newGroupName, setNewGroupName, onSubmit }: FormProps & { newGroupName: string, setNewGroupName: (name: string) => void, onSubmit: () => void }) => (
+    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-gray-50">
+      <div className="max-w-md w-full bg-white p-6 rounded-xl shadow-lg space-y-5 border">
+        <h2 className="text-2xl font-bold text-indigo-600">Create New Group</h2>
+        <p className="text-gray-500 text-sm">Start a new party for you and your friends.</p>
+        <input
+            value={newGroupName}
+            onChange={(e) => setNewGroupName(e.target.value)}
+            placeholder="Group Name (e.g., The Quiz Masters)"
+            className="p-3 border rounded-xl text-sm w-full focus:ring-indigo-500 focus:border-indigo-500"
+            disabled={busyAction}
+        />
+        <button
+            onClick={onSubmit}
+            disabled={busyAction || !newGroupName.trim()}
+            className={`w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition ${
+                busyAction || !newGroupName.trim() ? "bg-indigo-300" : "bg-indigo-500 hover:bg-indigo-600 shadow-md"
+            }`}
+        >
+            {busyAction && <Loader2 className="w-4 h-4 animate-spin" />}
+            {busyAction ? "Creating..." : "Create Group"}
+        </button>
+        <button
+            onClick={onCancel}
+            className="w-full py-2 text-sm text-gray-600 border rounded-xl hover:bg-gray-100"
+        >
+            Cancel
+        </button>
+      </div>
+    </div>
+));
+
+// Helper component: Join Group Form (Memoized for stability)
+const MemoJoinGroupForm = React.memo(({ busyAction, onCancel, joinCode, setJoinCode, onSubmit }: FormProps & { joinCode: string, setJoinCode: (code: string) => void, onSubmit: () => void }) => (
+    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-gray-50">
+      <div className="max-w-md w-full bg-white p-6 rounded-xl shadow-lg space-y-5 border">
+        <h2 className="text-2xl font-bold text-indigo-600">Join Group with Code</h2>
+        <p className="text-gray-500 text-sm">Ask the group owner for the unique ID code.</p>
+        <input
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value)}
+            placeholder="Enter Group ID"
+            className="p-3 border rounded-xl text-sm w-full focus:ring-indigo-500 focus:border-indigo-500"
+            disabled={busyAction}
+        />
+        <button
+            onClick={onSubmit}
+            disabled={busyAction || !joinCode.trim()}
+            className={`w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition ${
+                busyAction || !joinCode.trim() ? "bg-indigo-300" : "bg-indigo-500 hover:bg-indigo-600 shadow-md"
+            }`}
+        >
+            {busyAction && <Loader2 className="w-4 h-4 animate-spin" />}
+            {busyAction ? "Joining..." : "Join Group"}
+        </button>
+        <button
+            onClick={onCancel}
+            className="w-full py-2 text-sm text-gray-600 border rounded-xl hover:bg-gray-100"
+        >
+            Cancel
+        </button>
+      </div>
+    </div>
+));
+
+// ----------------------------------------------
+
+
 /* -------------------------------------------------
     MAIN COMPONENT
 ------------------------------------------------- */
@@ -127,10 +203,7 @@ export default function Groups({
       setSelectedGroupId(data[0].group_id);
     }
     
-    // NOTE: Removed setCreating(false) and setJoining(false) here. 
-    // They are correctly reset after successful creation/joining 
-    // or when the user manually cancels the form. This prevents 
-    // interrupting typing during background reloads.
+    // NOTE: Removed setCreating(false) and setJoining(false) here to fix input typing issue.
 
     setLoadingGroups(false);
   };
@@ -495,76 +568,8 @@ export default function Groups({
   };
 
   /* -------------------------------------------------
-    RENDER COMPONENTS (Extracted for Mobile/Desktop Forms)
+    RENDER COMPONENTS (Mobile-Specific)
   ------------------------------------------------- */
-
-  // Desktop/Mobile Re-used: Create Group Form
-  const CreateGroupForm = () => (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-gray-50">
-      <div className="max-w-md w-full bg-white p-6 rounded-xl shadow-lg space-y-5 border">
-        <h2 className="text-2xl font-bold text-indigo-600">Create New Group</h2>
-        <p className="text-gray-500 text-sm">Start a new party for you and your friends.</p>
-        <input
-            value={newGroupName}
-            // Fix input behavior: Ensure onChange is correct
-            onChange={(e) => setNewGroupName(e.target.value)}
-            placeholder="Group Name (e.g., The Quiz Masters)"
-            className="p-3 border rounded-xl text-sm w-full focus:ring-indigo-500 focus:border-indigo-500"
-            disabled={busyAction}
-        />
-        <button
-            onClick={handleCreateGroup}
-            disabled={busyAction || !newGroupName.trim()}
-            className={`w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition ${
-                busyAction || !newGroupName.trim() ? "bg-indigo-300" : "bg-indigo-500 hover:bg-indigo-600 shadow-md"
-            }`}
-        >
-            {busyAction && <Loader2 className="w-4 h-4 animate-spin" />}
-            {busyAction ? "Creating..." : "Create Group"}
-        </button>
-        <button
-            onClick={() => { setCreating(false); setJoining(false); setMobilePage(0); }}
-            className="w-full py-2 text-sm text-gray-600 border rounded-xl hover:bg-gray-100"
-        >
-            Cancel
-        </button>
-      </div>
-    </div>
-  );
-
-  // Desktop/Mobile Re-used: Join Group Form
-  const JoinGroupForm = () => (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-gray-50">
-      <div className="max-w-md w-full bg-white p-6 rounded-xl shadow-lg space-y-5 border">
-        <h2 className="text-2xl font-bold text-indigo-600">Join Group with Code</h2>
-        <p className="text-gray-500 text-sm">Ask the group owner for the unique ID code.</p>
-        <input
-            value={joinCode}
-            // Fix input behavior: Ensure onChange is correct
-            onChange={(e) => setJoinCode(e.target.value)}
-            placeholder="Enter Group ID"
-            className="p-3 border rounded-xl text-sm w-full focus:ring-indigo-500 focus:border-indigo-500"
-            disabled={busyAction}
-        />
-        <button
-            onClick={handleJoinGroup}
-            disabled={busyAction || !joinCode.trim()}
-            className={`w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition ${
-                busyAction || !joinCode.trim() ? "bg-indigo-300" : "bg-indigo-500 hover:bg-indigo-600 shadow-md"
-            }`}
-        >
-            {busyAction && <Loader2 className="w-4 h-4 animate-spin" />}
-            {busyAction ? "Joining..." : "Join Group"}
-        </button>
-        <button
-            onClick={() => { setCreating(false); setJoining(false); setMobilePage(0); }}
-            className="w-full py-2 text-sm text-gray-600 border rounded-xl hover:bg-gray-100"
-        >
-            Cancel
-        </button>
-      </div>
-    </div>
-  );
 
   // Mobile-Specific Panels (kept from previous redesign)
   const GroupsListPanel = () => (
@@ -882,6 +887,12 @@ export default function Groups({
   /* -------------------------------------------------
     RENDER
   ------------------------------------------------- */
+  const handleCancelForm = () => {
+      setCreating(false);
+      setJoining(false);
+      setMobilePage(0);
+  }
+
   return (
     <div className="relative w-full h-[80vh] max-h-[900px] bg-white rounded-3xl shadow-2xl border overflow-hidden">
       
@@ -968,9 +979,21 @@ export default function Groups({
         <div className="flex-1 flex flex-col border-r min-w-0">
           
           {creating ? (
-            <CreateGroupForm />
+            <MemoCreateGroupForm 
+                busyAction={busyAction}
+                newGroupName={newGroupName}
+                setNewGroupName={setNewGroupName}
+                onSubmit={handleCreateGroup}
+                onCancel={handleCancelForm}
+            />
           ) : joining ? (
-            <JoinGroupForm />
+            <MemoJoinGroupForm 
+                busyAction={busyAction}
+                joinCode={joinCode}
+                setJoinCode={setJoinCode}
+                onSubmit={handleJoinGroup}
+                onCancel={handleCancelForm}
+            />
           ) : !selectedGroup ? (
             <div className="flex-1 flex items-center justify-center text-gray-400">
               Select a group or use the buttons on the left.
@@ -1194,8 +1217,24 @@ export default function Groups({
           {mobilePage === 0 && <GroupsListPanel />}
           {mobilePage === 1 && selectedGroupId && <ChatPanel />}
           {mobilePage === 2 && selectedGroupId && <MembersPanel />}
-          {mobilePage === 3 && <CreateGroupForm />} 
-          {mobilePage === 4 && <JoinGroupForm />}
+          {mobilePage === 3 && (
+            <MemoCreateGroupForm 
+                busyAction={busyAction}
+                newGroupName={newGroupName}
+                setNewGroupName={setNewGroupName}
+                onSubmit={handleCreateGroup}
+                onCancel={handleCancelForm}
+            />
+          )} 
+          {mobilePage === 4 && (
+            <MemoJoinGroupForm 
+                busyAction={busyAction}
+                joinCode={joinCode}
+                setJoinCode={setJoinCode}
+                onSubmit={handleJoinGroup}
+                onCancel={handleCancelForm}
+            />
+          )}
         
           {/* Default State when Chat/Members is selected but no Group is set */}
           {((mobilePage === 1 || mobilePage === 2) && !selectedGroupId) && (
