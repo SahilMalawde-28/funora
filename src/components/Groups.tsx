@@ -13,7 +13,7 @@ import {
   LogOut,
   Shield,
   XCircle,
-  List, // Added List icon for the Groups Tab
+  List, 
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -98,10 +98,6 @@ export default function Groups({
   // MOBILE STATE: (0 = Groups List, 1 = Chat, 2 = Members, 3 = Create Group, 4 = Join Group)
   const [mobilePage, setMobilePage] = useState<number>(0);
   
-  // Removed swipe state, as we are using a tabbed interface.
-  // const touchStartX = useRef<number | null>(null);
-  // const touchDeltaX = useRef(0);
-
   const selectedMembership = useMemo(
     () => memberships.find((m) => m.group_id === selectedGroupId) || null,
     [memberships, selectedGroupId]
@@ -414,7 +410,7 @@ export default function Groups({
   };
 
   /* -------------------------------------------------
-    ROOM CODE EXTRACTION
+    GROUP CODE HANDLERS
   ------------------------------------------------- */
   function extractRoomCode(message: string): string | null {
     if (!message) return null;
@@ -437,6 +433,19 @@ export default function Groups({
 
     return firstToken.toUpperCase();
   }
+
+  // NEW FUNCTIONALITY: Copies the Group ID to the clipboard
+  const handleCopyCode = async () => {
+    if (!selectedGroupId) return;
+    try {
+      await navigator.clipboard.writeText(selectedGroupId);
+      alert("Group ID copied to clipboard!");
+    } catch (err) {
+      console.error("Failed to copy code:", err);
+      alert("Failed to copy Group ID. Please check console.");
+    }
+  };
+  // END NEW FUNCTIONALITY
 
   /* -------------------------------------------------
     QUICK JOIN fallback
@@ -476,7 +485,6 @@ export default function Groups({
 
   /* -------------------------------------------------
     RENDER COMPONENTS
-    (These are extracted for clarity in the mobile view)
   ------------------------------------------------- */
 
   // Helper component for the Groups List panel (mobilePage === 0)
@@ -764,10 +772,23 @@ export default function Groups({
     }
     return (
       <div className="flex-1 overflow-y-auto p-4 bg-white">
-        <div className="font-bold text-lg mb-4 flex items-center gap-2">
-            <Users className="w-5 h-5 text-indigo-600" />
-            Group Members
-            <span className="text-sm text-gray-500">({members.length})</span>
+        <div className="font-bold text-lg mb-4 flex items-center justify-between">
+            <span className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-indigo-600" />
+                Group Members 
+                <span className="text-sm text-gray-500">({members.length})</span>
+            </span>
+
+            {/* NEW: Copy Group ID button for Mobile */}
+            {selectedGroupId && (
+                <button
+                    onClick={handleCopyCode}
+                    className="bg-gray-100 text-indigo-600 px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 border border-gray-300 hover:bg-gray-200"
+                >
+                    <Copy className="w-4 h-4" />
+                    Copy ID
+                </button>
+            )}
         </div>
 
         <div className="space-y-3">
@@ -866,10 +887,9 @@ export default function Groups({
     RENDER
   ------------------------------------------------- */
   return (
-    // Component Wrapper (No horizontal overflow is necessary as the mobile view is contained)
     <div className="relative w-full h-[80vh] max-h-[900px] bg-white rounded-3xl shadow-2xl border overflow-hidden">
       
-      {/* DESKTOP 3-column layout (Kept unchanged) */}
+      {/* DESKTOP 3-column layout */}
       <div className="hidden md:flex h-full">
         {/* LEFT: Groups List */}
         <div className="w-64 bg-gray-50 border-r flex flex-col">
@@ -1051,8 +1071,18 @@ export default function Groups({
 
                 {/* RIGHT: Members (Desktop) */}
                 <div className="w-60 flex flex-col border-l">
-                  <div className="px-4 py-2 border-b text-[11px] text-gray-500 flex items-center gap-1">
-                    <Users className="w-3 h-3" /> Members
+                  <div className="px-4 py-2 border-b text-[11px] text-gray-500 flex items-center justify-between gap-1">
+                    <span className="flex items-center gap-1"><Users className="w-3 h-3" /> Members</span>
+                     {/* NEW: Copy Group ID button for Desktop */}
+                    {selectedGroupId && (
+                      <button
+                        onClick={handleCopyCode}
+                        className="bg-gray-100 text-indigo-600 px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 border border-gray-300 hover:bg-gray-200"
+                      >
+                          <Copy className="w-3 h-3" />
+                          Copy ID
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-3 space-y-2">
