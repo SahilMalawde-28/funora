@@ -418,6 +418,32 @@ await supabase
     setLoading(false);
   };
 
+  // inside App.tsx
+const handleQuickJoinRoom = async (code: string) => {
+  try {
+    // reuse your existing joinRoom helper if available.
+    // joinRoom should return { room, player } on success.
+    // If joinRoom requires the playerId and profile, pass them.
+    if (!profile) return { success: false, message: "Profile missing" };
+
+    const { room: joinedRoom, player } = await joinRoom(code, playerId, profile.name, profile.avatar);
+    if (!joinedRoom) return { success: false, message: "Failed to join room" };
+
+    // set local state like you do in handleJoinRoom
+    setRoom(joinedRoom);
+    setCurrentPlayer(player);
+    localStorage.setItem("funora_room", JSON.stringify(joinedRoom));
+    localStorage.setItem("funora_player", JSON.stringify(player));
+    await fetchPlayers(joinedRoom.id);
+
+    return { success: true };
+  } catch (err) {
+    console.error("Quick join failed:", err);
+    return { success: false, message: "Quick join failed" };
+  }
+};
+
+
   // =============================================
   // START GAME
   // =============================================
