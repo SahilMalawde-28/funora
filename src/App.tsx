@@ -504,7 +504,8 @@ const handleEndGame = async (results?: Record<string, boolean>) => {
   onCreateRoom={handleCreateRoom}
   onJoinRoom={handleJoinRoom}
   profile={profile}
-  onStartGroupGame={handleStartGroupGame}  // <---- ADD THIS!!!
+  onStartGroupGame={handleStartGroupGame}
+  onQuickJoinRoom={(code) => handleJoinRoom(code, profile.name, profile.avatar)}
 />
 
 
