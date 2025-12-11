@@ -269,6 +269,7 @@ export default function Home({
   <Groups
     profile={profile}
     onStartGroupGame={onStartGroupGame}   // <-- PASS IT DOWN
+    onQuickJoinRoom={onQuickJoinRoom}
     onBack={() => setView("home")}
   />
 )}
