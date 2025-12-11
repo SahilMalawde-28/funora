@@ -13,6 +13,7 @@ import {
   LogOut,
   Shield,
   XCircle,
+  List, // Added List icon for the Groups Tab
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -94,10 +95,12 @@ export default function Groups({
 
   const [busyAction, setBusyAction] = useState(false);
 
-  // mobile paging (0 = groups, 1 = chat, 2 = members)
+  // MOBILE STATE: (0 = Groups List, 1 = Chat, 2 = Members, 3 = Create Group, 4 = Join Group)
   const [mobilePage, setMobilePage] = useState<number>(0);
-  const touchStartX = useRef<number | null>(null);
-  const touchDeltaX = useRef(0);
+  
+  // Removed swipe state, as we are using a tabbed interface.
+  // const touchStartX = useRef<number | null>(null);
+  // const touchDeltaX = useRef(0);
 
   const selectedMembership = useMemo(
     () => memberships.find((m) => m.group_id === selectedGroupId) || null,
@@ -105,6 +108,8 @@ export default function Groups({
   );
   const selectedGroup = selectedMembership?.groups ?? null;
   const isOwner = selectedGroup?.owner_id === profile.id;
+  const isSelectedGroupAdmin = selectedMembership?.role === "admin" || selectedMembership?.role === "owner";
+
 
   /* -------------------------------------------------
     LOAD GROUPS
@@ -178,7 +183,7 @@ export default function Groups({
   };
 
   /* -------------------------------------------------
-    SUBSCRIBE TO MESSAGE UPDATES
+    SUBSCRIBE TO MESSAGE UPDATES (Loads members/messages on ID change)
   ------------------------------------------------- */
   useEffect(() => {
     if (!selectedGroupId) return;
@@ -196,7 +201,7 @@ export default function Groups({
           table: "group_messages",
           filter: `group_id=eq.${selectedGroupId}`,
         },
-        // on new message, just reload messages (dedupe prevents doubles)
+        // on new message, just reload messages (we rely on that)
         () => {
           loadMessages(selectedGroupId);
         }
@@ -241,6 +246,7 @@ export default function Groups({
 
     setNewGroupName("");
     setCreating(false);
+    setMobilePage(0); // Go back to group list
     await loadGroups();
     setSelectedGroupId(g.id);
     setBusyAction(false);
@@ -281,6 +287,7 @@ export default function Groups({
       setJoining(false);
       setBusyAction(false);
       setSelectedGroupId(g.id);
+      setMobilePage(1); // Go to chat
       await loadGroups();
       return;
     }
@@ -300,6 +307,7 @@ export default function Groups({
 
     setJoinCode("");
     setJoining(false);
+    setMobilePage(1); // Go to chat
     await loadGroups();
     setSelectedGroupId(g.id);
     setBusyAction(false);
@@ -325,6 +333,7 @@ export default function Groups({
     }
 
     setSelectedGroupId(null);
+    setMobilePage(0); // Go back to group list
     await loadGroups();
   };
 
@@ -405,15 +414,12 @@ export default function Groups({
   };
 
   /* -------------------------------------------------
-    ROOM CODE EXTRACTION (new rules)
-    - Only extract when message STARTS with the 'party started' prefix
-    - Ignore 'FUNORA' token
+    ROOM CODE EXTRACTION
   ------------------------------------------------- */
   function extractRoomCode(message: string): string | null {
     if (!message) return null;
     const trimmed = message.trim();
 
-    // Only apply extraction for party started messages (prefix)
     if (!trimmed.startsWith("🎮 Party started!")) return null;
 
     const lower = trimmed.toLowerCase();
@@ -423,12 +429,10 @@ export default function Groups({
     const after = trimmed.substring(idx + 5).trim();
     if (!after) return null;
 
-    // first token
     const firstToken = after.split(/\s+/)[0].trim();
 
     if (!firstToken) return null;
-    if (firstToken.toUpperCase() === "FUNORA") return null; // ignore FUNORA
-    // Accept 6 char alphanumeric codes
+    if (firstToken.toUpperCase() === "FUNORA") return null;
     if (!/^[A-Z0-9]{6}$/i.test(firstToken)) return null;
 
     return firstToken.toUpperCase();
@@ -471,45 +475,401 @@ export default function Groups({
   };
 
   /* -------------------------------------------------
-    MOBILE SWIPE HANDLING (medium sensitivity)
-    sensitivity mapping: medium -> threshold 60px
+    RENDER COMPONENTS
+    (These are extracted for clarity in the mobile view)
   ------------------------------------------------- */
-  const SWIPE_THRESHOLD = 60; // you chose medium (2)
 
-  const onTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchDeltaX.current = 0;
-  };
+  // Helper component for the Groups List panel (mobilePage === 0)
+  const GroupsListPanel = () => (
+    <div className="flex-1 overflow-y-auto p-3 bg-gray-50">
+      <div className="flex items-center justify-between mb-4">
+        <div className="font-bold text-lg">My Groups</div>
+        <div className="flex gap-2">
+            <button
+            onClick={() => { setCreating(true); setMobilePage(3); }}
+            className="bg-indigo-500 text-white p-2 rounded-full text-sm font-semibold flex items-center justify-center shadow-lg hover:bg-indigo-600"
+            title="New Group"
+            >
+            <Plus className="w-4 h-4" />
+            </button>
 
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (touchStartX.current == null) return;
-    const x = e.touches[0].clientX;
-    touchDeltaX.current = x - touchStartX.current;
-  };
+            <button
+            onClick={() => { setJoining(true); setMobilePage(4); }}
+            className="bg-gray-200 text-gray-800 p-2 rounded-full text-sm font-semibold flex items-center justify-center shadow-lg hover:bg-gray-300"
+            title="Join with Code"
+            >
+            <Copy className="w-4 h-4" />
+            </button>
 
-  const onTouchEnd = () => {
-    if (touchStartX.current == null) return;
-    const d = touchDeltaX.current;
-    touchStartX.current = null;
-    touchDeltaX.current = 0;
+            <button
+                onClick={loadGroups}
+                className="text-xs px-2 py-1 rounded-full bg-gray-200 self-center hover:bg-gray-300"
+            >
+                {loadingGroups ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-gray-600" />
+                ) : (
+                    <span className="text-gray-600">↻</span>
+                )}
+            </button>
+        </div>
+      </div>
 
-    if (d > SWIPE_THRESHOLD) {
-      // swipe right -> previous page
-      setMobilePage((p) => Math.max(0, p - 1));
-    } else if (d < -SWIPE_THRESHOLD) {
-      // swipe left -> next page
-      setMobilePage((p) => Math.min(2, p + 1));
+      <div className="space-y-3">
+        {memberships.length === 0 ? (
+            <div className="p-4 text-sm text-gray-500 bg-white rounded-xl shadow-sm">
+                You're not in any groups yet. Tap <Plus className="w-4 h-4 inline-block text-indigo-500" /> to create one!
+            </div>
+        ) : (
+            memberships.map((m) => {
+            const g = m.groups;
+            const active = g.id === selectedGroupId;
+            return (
+                <button
+                key={m.id}
+                onClick={() => {
+                    setSelectedGroupId(g.id);
+                    setMobilePage(1); // Switch to Chat after selecting
+                }}
+                className={`w-full flex items-center gap-4 px-4 py-3 text-left rounded-xl shadow-md transition duration-150 ease-in-out ${
+                    active ? "bg-indigo-100 border-2 border-indigo-600" : "bg-white hover:bg-gray-50 border border-gray-200"
+                }`}
+                >
+                <span className="text-3xl">{g.avatar}</span>
+                <div className="flex-1">
+                    <div className="font-bold text-gray-800 truncate">{g.name}</div>
+                    <div className="text-xs text-indigo-600 font-medium">
+                    {m.role === "owner" && "Group Owner"}
+                    {m.role === "admin" && "Admin"}
+                    {m.role === "member" && "Member"}
+                    </div>
+                </div>
+                {active && <ArrowLeft className="w-4 h-4 transform rotate-180 text-indigo-600" />}
+                </button>
+            );
+            })
+        )}
+      </div>
+    </div>
+  );
+
+  // Helper component for Create Group panel (mobilePage === 3)
+  const CreateGroupPanel = () => (
+    <div className="flex flex-col flex-1 p-5 bg-white space-y-5">
+        <h2 className="text-xl font-bold text-indigo-600">Create New Group</h2>
+        <input
+            value={newGroupName}
+            onChange={(e) => setNewGroupName(e.target.value)}
+            placeholder="Group Name (e.g., The Quiz Masters)"
+            className="p-3 border rounded-xl text-sm w-full"
+            disabled={busyAction}
+        />
+        <button
+            onClick={handleCreateGroup}
+            disabled={busyAction || !newGroupName.trim()}
+            className={`w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 ${
+                busyAction || !newGroupName.trim() ? "bg-indigo-300" : "bg-indigo-500 hover:bg-indigo-600 shadow-lg"
+            }`}
+        >
+            {busyAction && <Loader2 className="w-4 h-4 animate-spin" />}
+            {busyAction ? "Creating..." : "Create Group"}
+        </button>
+        <button
+            onClick={() => setMobilePage(0)}
+            className="w-full py-2 text-sm text-gray-600 border rounded-xl hover:bg-gray-50"
+        >
+            Cancel
+        </button>
+    </div>
+  );
+
+  // Helper component for Join Group panel (mobilePage === 4)
+  const JoinGroupPanel = () => (
+    <div className="flex flex-col flex-1 p-5 bg-white space-y-5">
+        <h2 className="text-xl font-bold text-indigo-600">Join Group with Code</h2>
+        <input
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value)}
+            placeholder="Enter Group ID"
+            className="p-3 border rounded-xl text-sm w-full"
+            disabled={busyAction}
+        />
+        <button
+            onClick={handleJoinGroup}
+            disabled={busyAction || !joinCode.trim()}
+            className={`w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 ${
+                busyAction || !joinCode.trim() ? "bg-indigo-300" : "bg-indigo-500 hover:bg-indigo-600 shadow-lg"
+            }`}
+        >
+            {busyAction && <Loader2 className="w-4 h-4 animate-spin" />}
+            {busyAction ? "Joining..." : "Join Group"}
+        </button>
+        <button
+            onClick={() => setMobilePage(0)}
+            className="w-full py-2 text-sm text-gray-600 border rounded-xl hover:bg-gray-50"
+        >
+            Cancel
+        </button>
+    </div>
+  );
+
+  // Helper component for Chat panel (mobilePage === 1)
+  const ChatPanel = () => {
+    if (!selectedGroup) {
+      // This state should not be reached if the flow is followed, but for safety:
+      return (
+        <div className="flex-1 flex items-center justify-center text-gray-400 p-4">
+          No group selected. Go back to groups list.
+        </div>
+      );
     }
+    return (
+      <div className="flex-1 flex flex-col min-h-0 bg-white">
+        <div className="px-4 py-2 border-b flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{selectedGroup.avatar}</span>
+            <div>
+              <div className="font-semibold">{selectedGroup.name}</div>
+              <div className="text-xs text-gray-500">
+                {members.length} member{members.length !== 1 && "s"}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleStartGameClick}
+              className="bg-indigo-500 text-white px-3 py-1.5 rounded-full text-sm hover:bg-indigo-600"
+              title="Start Game"
+            >
+              <Gamepad2 className="w-4 h-4 inline-block" />
+            </button>
+            <button
+              onClick={handleLeaveGroup}
+              className="bg-red-50 text-red-600 px-3 py-1.5 rounded-full text-sm hover:bg-red-100"
+              title="Leave Group"
+            >
+              <LogOut className="w-4 h-4 inline-block" />
+            </button>
+          </div>
+        </div>
+
+        {/* chat messages */}
+        <div className="flex-1 overflow-auto p-3 space-y-3">
+          {loadingMessages ? (
+            <div className="text-xs text-gray-500">Loading messages…</div>
+          ) : messages.length === 0 ? (
+            <div className="text-xs text-gray-400 text-center py-5">
+              No messages yet. Say hi 👋
+            </div>
+          ) : (
+            messages.map((msg) => {
+              const mine = msg.profile_id === profile.id;
+              const code = extractRoomCode(msg.content);
+
+              return (
+                <div
+                  key={msg.id}
+                  className={`flex gap-2 ${
+                    mine ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  {!mine && (
+                    <div className="text-xl mt-1 flex-shrink-0">
+                      {msg.profiles?.avatar || "🙂"}
+                    </div>
+                  )}
+
+                  <div
+                    className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm shadow-md ${
+                      mine
+                        ? "bg-indigo-500 text-white rounded-br-none"
+                        : "bg-gray-100 text-gray-800 rounded-bl-none"
+                    }`}
+                  >
+                    <div className="font-semibold text-xs mb-1">
+                      {msg.profiles?.name || "Player"}
+                      {msg.profile_id === selectedGroup.owner_id && (
+                          <span className="text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded ml-1">Owner</span>
+                      )}
+                    </div>
+
+                    <div className="whitespace-pre-wrap">
+                      {msg.content}
+                    </div>
+
+                    {code && (
+                      <div className="mt-2">
+                        <button
+                          onClick={() => handleQuickJoin(code)}
+                          className={`px-3 py-1 text-xs rounded-full font-semibold ${
+                            mine
+                              ? "bg-white text-indigo-600"
+                              : "bg-indigo-500 text-white border border-indigo-300"
+                          }`}
+                        >
+                          Join {code}
+                        </button>
+                      </div>
+                    )}
+
+                    <div className={`mt-1 text-[10px] ${mine ? "text-indigo-100" : "text-gray-500"}`}>
+                      {new Date(msg.created_at).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  </div>
+
+                  {mine && (
+                    <div className="text-xl mt-1 flex-shrink-0">
+                      {msg.profiles?.avatar || profile.avatar}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* chat input */}
+        <div className="p-3 border-t flex items-center gap-2 bg-white">
+          <input
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+            placeholder="Type a message…"
+            className="flex-1 px-4 py-2 border rounded-full text-sm focus:ring-indigo-500 focus:border-indigo-500"
+          />
+
+          <button
+            onClick={handleSendMessage}
+            disabled={!newMessage.trim()}
+            className={`text-white p-2 rounded-full ${!newMessage.trim() ? "bg-gray-300" : "bg-indigo-500 hover:bg-indigo-600"}`}
+          >
+            <Send className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Helper component for Members panel (mobilePage === 2)
+  const MembersPanel = () => {
+    if (!selectedGroup) {
+        return (
+            <div className="flex-1 flex items-center justify-center text-gray-400 p-4">
+                No group selected.
+            </div>
+        );
+    }
+    return (
+      <div className="flex-1 overflow-y-auto p-4 bg-white">
+        <div className="font-bold text-lg mb-4 flex items-center gap-2">
+            <Users className="w-5 h-5 text-indigo-600" />
+            Group Members
+            <span className="text-sm text-gray-500">({members.length})</span>
+        </div>
+
+        <div className="space-y-3">
+          {loadingMembers ? (
+            <div className="text-sm text-gray-500">Loading members…</div>
+          ) : members.length === 0 ? (
+            <div className="text-sm text-gray-400">No members in this group.</div>
+          ) : (
+            members.map((m) => {
+              const p = m.profiles;
+              const isMe = p.id === profile.id;
+              const isMemberOwner = m.role === "owner";
+              const canModerate = isOwner && !isMe;
+              const canKick = isOwner && !isMemberOwner;
+              const canPromote = isOwner && m.role === "member";
+
+              return (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl shadow-sm border border-gray-200"
+                >
+                  <div className="text-2xl flex-shrink-0">{p.avatar}</div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold truncate">
+                      {p.name}{" "}
+                      {isMe && (
+                        <span className="text-xs text-indigo-500">(you)</span>
+                      )}
+                    </div>
+
+                    <div className="text-xs text-gray-500 flex items-center gap-1">
+                        {isMemberOwner && <Crown className="w-3 h-3 text-yellow-500" />}
+                        {m.role === "admin" && <Shield className="w-3 h-3 text-indigo-500" />}
+                        {m.role}
+                    </div>
+                  </div>
+
+                  {canModerate && (
+                    <div className="flex gap-2 flex-shrink-0">
+                      {canPromote && (
+                        <button
+                          onClick={() => handlePromoteToAdmin(m)}
+                          className="p-1.5 bg-indigo-100 rounded-full hover:bg-indigo-200"
+                          title="Promote to Admin"
+                        >
+                          <Shield className="w-4 h-4 text-indigo-700" />
+                        </button>
+                      )}
+
+                      {canKick && (
+                        <button
+                          onClick={() => handleKickMember(m)}
+                          className="p-1.5 bg-red-100 rounded-full hover:bg-red-200"
+                          title="Kick Member"
+                        >
+                          <XCircle className="w-4 h-4 text-red-600" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  };
+  
+  /* -------------------------------------------------
+    MOBILE TABS
+  ------------------------------------------------- */
+  const MobileTabButton = ({ pageIndex, icon, label }: { pageIndex: number, icon: React.ReactNode, label: string }) => {
+    const active = mobilePage === pageIndex;
+    const color = active ? "text-indigo-600" : "text-gray-500";
+    
+    // Only allow switching to Chat/Members if a group is selected
+    const isDisabled = (pageIndex === 1 || pageIndex === 2) && !selectedGroupId;
+
+    return (
+      <button
+        onClick={() => setMobilePage(pageIndex)}
+        disabled={isDisabled}
+        className={`flex flex-col items-center justify-center p-2 flex-1 transition-colors ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+      >
+        <div className={`w-6 h-6 ${color}`}>
+            {icon}
+        </div>
+        <span className={`text-xs mt-0.5 font-medium ${color}`}>{label}</span>
+      </button>
+    );
   };
 
   /* -------------------------------------------------
     RENDER
   ------------------------------------------------- */
   return (
-    // FIX 1: Added overflow-x-hidden to the component wrapper to prevent horizontal scrolling of the page/window.
-    <div className="relative w-full h-[80vh] max-h-[900px] bg-white rounded-3xl shadow-2xl border overflow-hidden overflow-x-hidden"> 
+    // Component Wrapper (No horizontal overflow is necessary as the mobile view is contained)
+    <div className="relative w-full h-[80vh] max-h-[900px] bg-white rounded-3xl shadow-2xl border overflow-hidden">
       
-      {/* DESKTOP 3-column layout */}
+      {/* DESKTOP 3-column layout (Kept unchanged) */}
       <div className="hidden md:flex h-full">
         {/* LEFT: Groups List */}
         <div className="w-64 bg-gray-50 border-r flex flex-col">
@@ -582,7 +942,7 @@ export default function Groups({
           </div>
         </div>
 
-        {/* CENTER: Chat */}
+        {/* CENTER: Chat (Desktop) */}
         <div className="flex-1 flex flex-col border-r min-w-0">
           {!selectedGroup ? (
             <div className="flex-1 flex items-center justify-center text-gray-400">
@@ -689,7 +1049,7 @@ export default function Groups({
                   </div>
                 </div>
 
-                {/* RIGHT: Members */}
+                {/* RIGHT: Members (Desktop) */}
                 <div className="w-60 flex flex-col border-l">
                   <div className="px-4 py-2 border-b text-[11px] text-gray-500 flex items-center gap-1">
                     <Users className="w-3 h-3" /> Members
@@ -743,335 +1103,61 @@ export default function Groups({
         </div>
       </div>
 
-      {/* MOBILE: sliding panels (visible under md) */}
-      {/* FIX 2: Added w-full to ensure this container respects the parent's boundaries */}
+      {/* MOBILE: Redesigned Tabbed Interface (visible under md) */}
       <div className="md:hidden flex flex-col h-full w-full">
 
-        {/* ---------- TOP NAV ---------- */}
-        <div className="flex items-center justify-between px-4 py-2 border-b bg-white z-20">
-          <div className="flex items-center gap-2">
+        {/* ---------- TOP NAV (Always visible) ---------- */}
+        <div className="flex items-center justify-between px-4 py-3 border-b bg-white z-20 shadow-sm">
+          <div className="flex items-center gap-3">
             {onBack && (
               <button onClick={onBack} className="p-1 rounded-full hover:bg-gray-100">
                 <ArrowLeft className="w-5 h-5" />
               </button>
             )}
-            <Users className="w-5 h-5 text-indigo-600" />
-            <span className="font-bold">Groups</span>
+            <span className="font-bold text-lg text-indigo-600">
+                {mobilePage === 0 && 'My Groups'}
+                {mobilePage === 1 && selectedGroup?.name}
+                {mobilePage === 2 && 'Members'}
+                {mobilePage === 3 && 'New Group'}
+                {mobilePage === 4 && 'Join Group'}
+            </span>
           </div>
 
-          <div className="flex items-center gap-1 text-xs">
-            <button
-              onClick={() => setMobilePage(0)}
-              className={`px-3 py-1 rounded-full ${
-                mobilePage === 0 ? "bg-indigo-500 text-white" : "bg-gray-100"
-              }`}
-            >
-              Groups
-            </button>
-
-            <button
-              onClick={() => setMobilePage(1)}
-              className={`px-3 py-1 rounded-full ${
-                mobilePage === 1 ? "bg-indigo-500 text-white" : "bg-gray-100"
-              }`}
-            >
-              Chat
-            </button>
-
-            <button
-              onClick={() => setMobilePage(2)}
-              className={`px-3 py-1 rounded-full ${
-                mobilePage === 2 ? "bg-indigo-500 text-white" : "bg-gray-100"
-              }`}
-            >
-              Members
-            </button>
-          </div>
+          {mobilePage === 1 && (
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={() => setMobilePage(2)}
+                    className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-full text-sm font-semibold flex items-center gap-1 hover:bg-gray-200"
+                >
+                    <Users className="w-4 h-4" />
+                    {members.length}
+                </button>
+            </div>
+          )}
         </div>
 
-        {/* ---------- FIXED SLIDER WRAPPER ---------- */}
-        <div
-          className="relative flex-1 overflow-hidden"  // This is essential to hide content outside the viewport
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-        >
-          <div
-            className="flex h-full w-[300%] transition-transform duration-300" // 300% width for three panels
-            style={{ transform: `translateX(-${mobilePage * 100}%)` }}  
-          >
+        {/* ---------- CONTENT PANELS (Conditional Render) ---------- */}
+        <div className="flex-1 overflow-y-auto">
+          {mobilePage === 0 && <GroupsListPanel />}
+          {mobilePage === 1 && selectedGroupId && <ChatPanel />}
+          {mobilePage === 2 && selectedGroupId && <MembersPanel />}
+          {mobilePage === 3 && <CreateGroupPanel />}
+          {mobilePage === 4 && <JoinGroupPanel />}
+        
+          {/* Default State when Chat/Members is selected but no Group is set */}
+          {((mobilePage === 1 || mobilePage === 2) && !selectedGroupId) && (
+             <div className="flex-1 flex items-center justify-center text-gray-400 p-4 h-full">
+                Please select a group from the "Groups" tab.
+             </div>
+          )}
+          
+        </div>
 
-            {/* ----------------------------------
-                PANEL 0 — GROUPS LIST (w-1/3)
-            ----------------------------------- */}
-            <div className="w-1/3 flex-shrink-0 overflow-y-auto bg-gray-50"> 
-              <div className="p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="font-semibold">My Groups</div>
-                  <button
-                    onClick={loadGroups}
-                    className="text-xs px-2 py-1 rounded bg-gray-200"
-                  >
-                    {loadingGroups ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      "↻"
-                    )}
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  {memberships.map((m) => {
-                    const g = m.groups;
-                    const active = g.id === selectedGroupId;
-                    return (
-                      <button
-                        key={m.id}
-                        onClick={() => {
-                          setSelectedGroupId(g.id);
-                          setMobilePage(1); // Navigates to chat panel on group selection
-                        }}
-                        className={`w-full flex items-center gap-3 px-3 py-3 text-left rounded ${
-                          active ? "bg-indigo-50" : "hover:bg-gray-100"
-                        }`}
-                      >
-                        <span className="text-2xl">{g.avatar}</span>
-                        <div className="flex-1">
-                          <div className="font-semibold text-sm">{g.name}</div>
-                          <div className="text-[11px] text-gray-500">
-                            {m.role}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* create / join */}
-              <div className="p-3 border-t space-y-2">
-                <button
-                  onClick={() => {
-                    setCreating(true);
-                    setJoining(false);
-                  }}
-                  className="w-full bg-indigo-500 text-white py-2 rounded-xl text-sm font-semibold"
-                >
-                  <Plus className="w-4 h-4 inline-block mr-2" /> New Group
-                </button>
-
-                <button
-                  onClick={() => {
-                    setJoining(true);
-                    setCreating(false);
-                  }}
-                  className="w-full bg-gray-200 text-gray-800 py-2 rounded-xl text-sm font-semibold"
-                >
-                  Join with Code
-                </button>
-              </div>
-            </div>
-
-            {/* ----------------------------------
-                PANEL 1 — CHAT (w-1/3)
-            ----------------------------------- */}
-            <div className="w-1/3 flex-shrink-0 flex flex-col overflow-y-auto"> 
-              {!selectedGroup ? (
-                <div className="flex-1 flex items-center justify-center text-gray-400 p-4">
-                  Select a group to begin.
-                </div>
-              ) : (
-                <>
-                  {/* chat header */}
-                  <div className="px-4 py-2 border-b flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{selectedGroup.avatar}</span>
-                      <div>
-                        <div className="font-semibold">{selectedGroup.name}</div>
-                        <div className="text-xs text-gray-500">
-                          {members.length} member{members.length !== 1 && "s"}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleStartGameClick}
-                        className="bg-indigo-500 text-white px-3 py-1.5 rounded text-sm"
-                      >
-                        <Gamepad2 className="w-4 h-4 inline-block" />
-                      </button>
-
-                      <button
-                        onClick={handleLeaveGroup}
-                        className="bg-red-50 text-red-600 px-3 py-1.5 rounded text-sm"
-                      >
-                        <LogOut className="w-4 h-4 inline-block" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* chat messages */}
-                  <div className="flex-1 overflow-auto p-3 space-y-3">
-                    {loadingMessages ? (
-                      <div className="text-xs text-gray-500">Loading messages…</div>
-                    ) : messages.length === 0 ? (
-                      <div className="text-xs text-gray-400">
-                        No messages yet. Say hi 👋
-                      </div>
-                    ) : (
-                      messages.map((msg) => {
-                        const mine = msg.profile_id === profile.id;
-                        const code = extractRoomCode(msg.content);
-
-                        return (
-                          <div
-                            key={msg.id}
-                            className={`flex gap-2 ${
-                              mine ? "justify-end" : "justify-start"
-                            }`}
-                          >
-                            {!mine && (
-                              <div className="text-xl mt-1">
-                                {msg.profiles?.avatar || "🙂"}
-                              </div>
-                            )}
-
-                            <div
-                              className={`max-w-[76%] px-3 py-2 rounded-2xl text-sm ${
-                                mine
-                                  ? "bg-indigo-500 text-white"
-                                  : "bg-gray-100 text-gray-800"
-                              }`}
-                            >
-                              <div className="font-semibold text-xs mb-1">
-                                {msg.profiles?.name}
-                              </div>
-
-                              <div className="whitespace-pre-wrap">
-                                {msg.content}
-                              </div>
-
-                              {code && (
-                                <div className="mt-2">
-                                  <button
-                                    onClick={() => handleQuickJoin(code)}
-                                    className={`px-2 py-1 text-[13px] rounded-full ${
-                                      mine
-                                        ? "bg-white text-indigo-600"
-                                        : "bg-indigo-500 text-white"
-                                    }`}
-                                  >
-                                    Join {code}
-                                  </button>
-                                </div>
-                              )}
-
-                              <div className="mt-1 text-[11px] text-gray-400">
-                                {new Date(msg.created_at).toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </div>
-                            </div>
-
-                            {mine && (
-                              <div className="text-xl mt-1">
-                                {msg.profiles?.avatar || profile.avatar}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-
-                  {/* chat input */}
-                  <div className="p-3 border-t flex items-center gap-2">
-                    <input
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                      placeholder="Type a message…"
-                      className="flex-1 px-3 py-2 border rounded-xl text-sm"
-                    />
-
-                    <button
-                      onClick={handleSendMessage}
-                      className="bg-indigo-500 text-white px-3 py-2 rounded-xl"
-                    >
-                      <Send className="w-4 h-4" />
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* ----------------------------------
-                PANEL 2 — MEMBERS (w-1/3)
-            ----------------------------------- */}
-            <div className="w-1/3 flex-shrink-0 overflow-y-auto bg-white"> 
-              <div className="px-4 py-2 border-b">
-                <div className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-indigo-600" />
-                  <div className="font-semibold">Members</div>
-                </div>
-              </div>
-
-              <div className="p-3 space-y-3">
-                {loadingMembers ? (
-                  <div className="text-xs text-gray-500">Loading members…</div>
-                ) : members.length === 0 ? (
-                  <div className="text-xs text-gray-400">No members in this group.</div>
-                ) : (
-                  members.map((m) => {
-                    const p = m.profiles;
-                    const isMe = p.id === profile.id;
-
-                    return (
-                      <div
-                        key={m.id}
-                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"
-                      >
-                        <div className="text-2xl">{p.avatar}</div>
-
-                        <div className="flex-1">
-                          <div className="font-semibold">
-                            {p.name}{" "}
-                            {isMe && (
-                              <span className="text-xs text-indigo-500">(you)</span>
-                            )}
-                          </div>
-
-                          <div className="text-xs text-gray-500">{m.role}</div>
-                        </div>
-
-                        {isOwner && !isMe && (
-                          <div className="flex gap-2">
-                            {m.role === "member" && (
-                              <button
-                                onClick={() => handlePromoteToAdmin(m)}
-                                className="p-2 bg-indigo-100 rounded"
-                              >
-                                <Shield className="w-4 h-4 text-indigo-700" />
-                              </button>
-                            )}
-
-                            <button
-                              onClick={() => handleKickMember(m)}
-                              className="p-2 bg-red-50 rounded"
-                            >
-                              <XCircle className="w-4 h-4 text-red-600" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </div>
+        {/* ---------- BOTTOM NAVIGATION TABS (Fixed) ---------- */}
+        <div className="bg-white border-t flex justify-around shadow-lg sticky bottom-0 z-30">
+            <MobileTabButton pageIndex={0} icon={<List />} label="Groups" />
+            <MobileTabButton pageIndex={1} icon={<MessageCircle />} label="Chat" />
+            <MobileTabButton pageIndex={2} icon={<Users />} label="Members" />
         </div>
       </div>
     </div>
