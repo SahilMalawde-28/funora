@@ -126,6 +126,10 @@ export default function Groups({
     if (!selectedGroupId && data && data.length > 0) {
       setSelectedGroupId(data[0].group_id);
     }
+    
+    // Reset group creation/joining state after loading groups
+    setCreating(false);
+    setJoining(false);
 
     setLoadingGroups(false);
   };
@@ -241,8 +245,10 @@ export default function Groups({
     }
 
     setNewGroupName("");
+    // Reset group creation/joining state for all views
     setCreating(false);
-    setMobilePage(0); // Go back to group list
+    setJoining(false);
+    setMobilePage(0); 
     await loadGroups();
     setSelectedGroupId(g.id);
     setBusyAction(false);
@@ -280,10 +286,11 @@ export default function Groups({
     if (existing) {
       alert("You're already in this group");
       setJoinCode("");
+      setCreating(false);
       setJoining(false);
       setBusyAction(false);
       setSelectedGroupId(g.id);
-      setMobilePage(1); // Go to chat
+      setMobilePage(1); 
       await loadGroups();
       return;
     }
@@ -302,8 +309,9 @@ export default function Groups({
     }
 
     setJoinCode("");
+    setCreating(false);
     setJoining(false);
-    setMobilePage(1); // Go to chat
+    setMobilePage(1); 
     await loadGroups();
     setSelectedGroupId(g.id);
     setBusyAction(false);
@@ -329,7 +337,9 @@ export default function Groups({
     }
 
     setSelectedGroupId(null);
-    setMobilePage(0); // Go back to group list
+    setCreating(false);
+    setJoining(false);
+    setMobilePage(0); 
     await loadGroups();
   };
 
@@ -434,18 +444,18 @@ export default function Groups({
     return firstToken.toUpperCase();
   }
 
-  // NEW FUNCTIONALITY: Copies the Group ID to the clipboard
+  // Copies the Group ID to the clipboard
   const handleCopyCode = async () => {
     if (!selectedGroupId) return;
     try {
       await navigator.clipboard.writeText(selectedGroupId);
-      alert("Group ID copied to clipboard!");
+      alert("Group ID copied to clipboard! Share this code to invite new members.");
     } catch (err) {
       console.error("Failed to copy code:", err);
       alert("Failed to copy Group ID. Please check console.");
     }
   };
-  // END NEW FUNCTIONALITY
+  // END GROUP CODE HANDLERS
 
   /* -------------------------------------------------
     QUICK JOIN fallback
@@ -484,10 +494,76 @@ export default function Groups({
   };
 
   /* -------------------------------------------------
-    RENDER COMPONENTS
+    RENDER COMPONENTS (Extracted for Mobile/Desktop Forms)
   ------------------------------------------------- */
 
-  // Helper component for the Groups List panel (mobilePage === 0)
+  // Desktop/Mobile Re-used: Create Group Form
+  const CreateGroupForm = () => (
+    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-gray-50">
+      <div className="max-w-md w-full bg-white p-6 rounded-xl shadow-lg space-y-5 border">
+        <h2 className="text-2xl font-bold text-indigo-600">Create New Group</h2>
+        <p className="text-gray-500 text-sm">Start a new party for you and your friends.</p>
+        <input
+            value={newGroupName}
+            onChange={(e) => setNewGroupName(e.target.value)}
+            placeholder="Group Name (e.g., The Quiz Masters)"
+            className="p-3 border rounded-xl text-sm w-full focus:ring-indigo-500 focus:border-indigo-500"
+            disabled={busyAction}
+        />
+        <button
+            onClick={handleCreateGroup}
+            disabled={busyAction || !newGroupName.trim()}
+            className={`w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition ${
+                busyAction || !newGroupName.trim() ? "bg-indigo-300" : "bg-indigo-500 hover:bg-indigo-600 shadow-md"
+            }`}
+        >
+            {busyAction && <Loader2 className="w-4 h-4 animate-spin" />}
+            {busyAction ? "Creating..." : "Create Group"}
+        </button>
+        <button
+            onClick={() => { setCreating(false); setJoining(false); setMobilePage(0); }}
+            className="w-full py-2 text-sm text-gray-600 border rounded-xl hover:bg-gray-100"
+        >
+            Cancel
+        </button>
+      </div>
+    </div>
+  );
+
+  // Desktop/Mobile Re-used: Join Group Form
+  const JoinGroupForm = () => (
+    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-gray-50">
+      <div className="max-w-md w-full bg-white p-6 rounded-xl shadow-lg space-y-5 border">
+        <h2 className="text-2xl font-bold text-indigo-600">Join Group with Code</h2>
+        <p className="text-gray-500 text-sm">Ask the group owner for the unique ID code.</p>
+        <input
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value)}
+            placeholder="Enter Group ID"
+            className="p-3 border rounded-xl text-sm w-full focus:ring-indigo-500 focus:border-indigo-500"
+            disabled={busyAction}
+        />
+        <button
+            onClick={handleJoinGroup}
+            disabled={busyAction || !joinCode.trim()}
+            className={`w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition ${
+                busyAction || !joinCode.trim() ? "bg-indigo-300" : "bg-indigo-500 hover:bg-indigo-600 shadow-md"
+            }`}
+        >
+            {busyAction && <Loader2 className="w-4 h-4 animate-spin" />}
+            {busyAction ? "Joining..." : "Join Group"}
+        </button>
+        <button
+            onClick={() => { setCreating(false); setJoining(false); setMobilePage(0); }}
+            className="w-full py-2 text-sm text-gray-600 border rounded-xl hover:bg-gray-100"
+        >
+            Cancel
+        </button>
+      </div>
+    </div>
+  );
+
+  // Mobile-Specific Panels (kept from previous redesign)
   const GroupsListPanel = () => (
     <div className="flex-1 overflow-y-auto p-3 bg-gray-50">
       <div className="flex items-center justify-between mb-4">
@@ -537,6 +613,8 @@ export default function Groups({
                 onClick={() => {
                     setSelectedGroupId(g.id);
                     setMobilePage(1); // Switch to Chat after selecting
+                    setCreating(false); // Close forms if open
+                    setJoining(false); // Close forms if open
                 }}
                 className={`w-full flex items-center gap-4 px-4 py-3 text-left rounded-xl shadow-md transition duration-150 ease-in-out ${
                     active ? "bg-indigo-100 border-2 border-indigo-600" : "bg-white hover:bg-gray-50 border border-gray-200"
@@ -560,76 +638,8 @@ export default function Groups({
     </div>
   );
 
-  // Helper component for Create Group panel (mobilePage === 3)
-  const CreateGroupPanel = () => (
-    <div className="flex flex-col flex-1 p-5 bg-white space-y-5">
-        <h2 className="text-xl font-bold text-indigo-600">Create New Group</h2>
-        <input
-            value={newGroupName}
-            onChange={(e) => setNewGroupName(e.target.value)}
-            placeholder="Group Name (e.g., The Quiz Masters)"
-            className="p-3 border rounded-xl text-sm w-full"
-            disabled={busyAction}
-        />
-        <button
-            onClick={handleCreateGroup}
-            disabled={busyAction || !newGroupName.trim()}
-            className={`w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 ${
-                busyAction || !newGroupName.trim() ? "bg-indigo-300" : "bg-indigo-500 hover:bg-indigo-600 shadow-lg"
-            }`}
-        >
-            {busyAction && <Loader2 className="w-4 h-4 animate-spin" />}
-            {busyAction ? "Creating..." : "Create Group"}
-        </button>
-        <button
-            onClick={() => setMobilePage(0)}
-            className="w-full py-2 text-sm text-gray-600 border rounded-xl hover:bg-gray-50"
-        >
-            Cancel
-        </button>
-    </div>
-  );
-
-  // Helper component for Join Group panel (mobilePage === 4)
-  const JoinGroupPanel = () => (
-    <div className="flex flex-col flex-1 p-5 bg-white space-y-5">
-        <h2 className="text-xl font-bold text-indigo-600">Join Group with Code</h2>
-        <input
-            value={joinCode}
-            onChange={(e) => setJoinCode(e.target.value)}
-            placeholder="Enter Group ID"
-            className="p-3 border rounded-xl text-sm w-full"
-            disabled={busyAction}
-        />
-        <button
-            onClick={handleJoinGroup}
-            disabled={busyAction || !joinCode.trim()}
-            className={`w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 ${
-                busyAction || !joinCode.trim() ? "bg-indigo-300" : "bg-indigo-500 hover:bg-indigo-600 shadow-lg"
-            }`}
-        >
-            {busyAction && <Loader2 className="w-4 h-4 animate-spin" />}
-            {busyAction ? "Joining..." : "Join Group"}
-        </button>
-        <button
-            onClick={() => setMobilePage(0)}
-            className="w-full py-2 text-sm text-gray-600 border rounded-xl hover:bg-gray-50"
-        >
-            Cancel
-        </button>
-    </div>
-  );
-
-  // Helper component for Chat panel (mobilePage === 1)
   const ChatPanel = () => {
-    if (!selectedGroup) {
-      // This state should not be reached if the flow is followed, but for safety:
-      return (
-        <div className="flex-1 flex items-center justify-center text-gray-400 p-4">
-          No group selected. Go back to groups list.
-        </div>
-      );
-    }
+    if (!selectedGroup) return <div className="flex-1 flex items-center justify-center text-gray-400 p-4">No group selected.</div>;
     return (
       <div className="flex-1 flex flex-col min-h-0 bg-white">
         <div className="px-4 py-2 border-b flex items-center justify-between">
@@ -761,34 +771,14 @@ export default function Groups({
     );
   };
 
-  // Helper component for Members panel (mobilePage === 2)
   const MembersPanel = () => {
-    if (!selectedGroup) {
-        return (
-            <div className="flex-1 flex items-center justify-center text-gray-400 p-4">
-                No group selected.
-            </div>
-        );
-    }
+    if (!selectedGroup) return <div className="flex-1 flex items-center justify-center text-gray-400 p-4">No group selected.</div>;
     return (
       <div className="flex-1 overflow-y-auto p-4 bg-white">
-        <div className="font-bold text-lg mb-4 flex items-center justify-between">
-            <span className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-indigo-600" />
-                Group Members 
-                <span className="text-sm text-gray-500">({members.length})</span>
-            </span>
-
-            {/* NEW: Copy Group ID button for Mobile */}
-            {selectedGroupId && (
-                <button
-                    onClick={handleCopyCode}
-                    className="bg-gray-100 text-indigo-600 px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 border border-gray-300 hover:bg-gray-200"
-                >
-                    <Copy className="w-4 h-4" />
-                    Copy ID
-                </button>
-            )}
+        <div className="font-bold text-lg mb-4 flex items-center gap-2">
+            <Users className="w-5 h-5 text-indigo-600" />
+            Group Members
+            <span className="text-sm text-gray-500">({members.length})</span>
         </div>
 
         <div className="space-y-3">
@@ -866,12 +856,15 @@ export default function Groups({
     const active = mobilePage === pageIndex;
     const color = active ? "text-indigo-600" : "text-gray-500";
     
-    // Only allow switching to Chat/Members if a group is selected
     const isDisabled = (pageIndex === 1 || pageIndex === 2) && !selectedGroupId;
 
     return (
       <button
-        onClick={() => setMobilePage(pageIndex)}
+        onClick={() => {
+            setMobilePage(pageIndex);
+            setCreating(false); // Close desktop forms on tab switch
+            setJoining(false); // Close desktop forms on tab switch
+        }}
         disabled={isDisabled}
         className={`flex flex-col items-center justify-center p-2 flex-1 transition-colors ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
       >
@@ -919,7 +912,11 @@ export default function Groups({
                 return (
                   <button
                     key={m.id}
-                    onClick={() => setSelectedGroupId(g.id)}
+                    onClick={() => {
+                        setSelectedGroupId(g.id);
+                        setCreating(false); // Close desktop forms
+                        setJoining(false); // Close desktop forms
+                    }}
                     className={`w-full flex items-center gap-3 px-4 py-3 text-left text-sm border-b ${
                       active ? "bg-indigo-50 border-l-4 border-indigo-500" : "hover:bg-gray-100"
                     }`}
@@ -944,6 +941,7 @@ export default function Groups({
               onClick={() => {
                 setCreating(true);
                 setJoining(false);
+                setSelectedGroupId(null);
               }}
               className="w-full bg-indigo-500 text-white py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-2"
             >
@@ -954,6 +952,7 @@ export default function Groups({
               onClick={() => {
                 setJoining(true);
                 setCreating(false);
+                setSelectedGroupId(null);
               }}
               className="w-full bg-gray-200 text-gray-800 py-2 rounded-xl text-xs font-semibold"
             >
@@ -962,14 +961,20 @@ export default function Groups({
           </div>
         </div>
 
-        {/* CENTER: Chat (Desktop) */}
+        {/* CENTER: Main Content Area (Desktop) */}
         <div className="flex-1 flex flex-col border-r min-w-0">
-          {!selectedGroup ? (
+          
+          {creating ? (
+            <CreateGroupForm />
+          ) : joining ? (
+            <JoinGroupForm />
+          ) : !selectedGroup ? (
             <div className="flex-1 flex items-center justify-center text-gray-400">
-              Select a group to begin.
+              Select a group or use the buttons on the left.
             </div>
           ) : (
             <>
+              {/* Desktop Chat Header */}
               <div className="px-5 py-3 border-b flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-3xl">{selectedGroup.avatar}</span>
@@ -982,7 +987,19 @@ export default function Groups({
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-gray-500">{members.length} member{members.length !== 1 && "s"}</div>
+                    <div className="text-[11px] text-gray-500 flex items-center gap-3">
+                      <span>{members.length} member{members.length !== 1 && "s"}</span>
+                      {/* FIX: Copy Group ID moved to header */}
+                      {selectedGroupId && (
+                        <button
+                          onClick={handleCopyCode}
+                          className="text-indigo-600 text-[10px] font-semibold flex items-center gap-1 hover:text-indigo-800"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span className="truncate max-w-[80px]">{selectedGroupId}</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1009,6 +1026,7 @@ export default function Groups({
                     <MessageCircle className="w-3 h-3" /> Group chat
                   </div>
 
+                  {/* Desktop Chat Messages */}
                   <div className="flex-1 overflow-y-auto p-4 space-y-3">
                     {loadingMessages ? (
                       <div className="text-xs text-gray-500">Loading messages…</div>
@@ -1055,6 +1073,7 @@ export default function Groups({
                     )}
                   </div>
 
+                  {/* Desktop Chat Input */}
                   <div className="p-3 border-t flex items-center gap-2">
                     <input
                       value={newMessage}
@@ -1071,18 +1090,8 @@ export default function Groups({
 
                 {/* RIGHT: Members (Desktop) */}
                 <div className="w-60 flex flex-col border-l">
-                  <div className="px-4 py-2 border-b text-[11px] text-gray-500 flex items-center justify-between gap-1">
-                    <span className="flex items-center gap-1"><Users className="w-3 h-3" /> Members</span>
-                     {/* NEW: Copy Group ID button for Desktop */}
-                    {selectedGroupId && (
-                      <button
-                        onClick={handleCopyCode}
-                        className="bg-gray-100 text-indigo-600 px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 border border-gray-300 hover:bg-gray-200"
-                      >
-                          <Copy className="w-3 h-3" />
-                          Copy ID
-                      </button>
-                    )}
+                  <div className="px-4 py-2 border-b text-[11px] text-gray-500 flex items-center gap-1">
+                    <Users className="w-3 h-3" /> Members
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -1152,6 +1161,17 @@ export default function Groups({
                 {mobilePage === 4 && 'Join Group'}
             </span>
           </div>
+          
+          {/* FIX: Moved Copy ID button to the mobile header when in Chat/Members view */}
+          {selectedGroupId && (mobilePage === 1 || mobilePage === 2) && (
+            <button
+                onClick={handleCopyCode}
+                className="bg-gray-100 text-indigo-600 px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 border border-gray-300 hover:bg-gray-200"
+            >
+                <Copy className="w-4 h-4" />
+                Copy ID
+            </button>
+          )}
 
           {mobilePage === 1 && (
             <div className="flex items-center gap-2">
@@ -1171,8 +1191,8 @@ export default function Groups({
           {mobilePage === 0 && <GroupsListPanel />}
           {mobilePage === 1 && selectedGroupId && <ChatPanel />}
           {mobilePage === 2 && selectedGroupId && <MembersPanel />}
-          {mobilePage === 3 && <CreateGroupPanel />}
-          {mobilePage === 4 && <JoinGroupPanel />}
+          {mobilePagePage === 3 && <CreateGroupForm />} 
+          {mobilePage === 4 && <JoinGroupForm />}
         
           {/* Default State when Chat/Members is selected but no Group is set */}
           {((mobilePage === 1 || mobilePage === 2) && !selectedGroupId) && (
