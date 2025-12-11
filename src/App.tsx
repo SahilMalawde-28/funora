@@ -29,7 +29,7 @@ import MemoryGame from "./components/games/MemoryGame";
 import HerdGame from "./components/games/HerdGame";
 import ChameleonGame from "./components/games/ChameleonGame";
 import CoupGame from "./components/games/CoupGame";
-
+import FloatingGroupChat from "./components/FloatingGroupChat"
 function App() {
   // =============================================
   // PROFILE LOADING
